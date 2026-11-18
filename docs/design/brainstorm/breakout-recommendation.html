@@ -1,0 +1,37 @@
+<h2>My pick for a beginner: start simple, measure everything</h2>
+<p class="subtitle">You don't need to know which breakouts work. That's the backtester's job. Start with the ones a computer can detect without judgement, then let the data tell you which filters help.</p>
+
+<h3>Version 1: the core pattern</h3>
+<div class="options">
+  <div class="option selected" data-choice="core-n-year-high" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>New N-year high (A)</h3>
+      <svg viewBox="0 0 220 60" width="220" height="60"><polyline fill="none" stroke="#888" stroke-width="2" points="5,35 25,15 45,40 65,25 85,48 105,30 125,44 145,32 165,36 185,25 200,10 215,5"/><line x1="5" y1="15" x2="215" y2="15" stroke="#e5534b" stroke-dasharray="4 3"/><circle cx="198" cy="12" r="4" fill="#3fb950"/></svg>
+      <p><b>Why:</b> it's one clear rule ("today's close is the highest in 3 years"), so there's nothing to argue about. Stocks making new long-term highs are also one of the most-studied effects in markets, so it's a credible place to start. Years is a dial you can change: 2, 3, 5, all-time.</p>
+    </div>
+  </div>
+</div>
+
+<h3>Version 1: four trust filters (each one on/off in the builder)</h3>
+<div class="options" data-multiselect>
+  <div class="option selected" data-choice="f-close" onclick="toggleSelect(this)"><div class="letter">1</div><div class="content"><h3>Weekly close above the level</h3><p>A stock that pokes above the high for an hour and falls back hasn't broken out. Waiting for the week to <i>close</i> above it filters out many fakes.</p></div></div>
+  <div class="option selected" data-choice="f-volume" onclick="toggleSelect(this)"><div class="letter">2</div><div class="content"><h3>Volume surge</h3><p>Volume = how many shares changed hands. A breakout on 2× normal volume means big buyers are involved; on thin volume it's often noise.</p></div></div>
+  <div class="option selected" data-choice="f-rs" onclick="toggleSelect(this)"><div class="letter">3</div><div class="content"><h3>Beating the market</h3><p>Is the stock up more than the Nifty over the last 6 months? Leaders tend to keep leading.</p></div></div>
+  <div class="option selected" data-choice="f-not-extended" onclick="toggleSelect(this)"><div class="letter">4</div><div class="content"><h3>Not too far above the level</h3><p>If it's already 25% above the old high, you're late and your stop-loss (exit if wrong) is far away. Within ~5–8% keeps the risk small.</p></div></div>
+</div>
+
+<h3>Later (not version 1)</h3>
+<div class="pros-cons">
+  <div class="pros"><h4>Add once V1 works</h4><ul>
+    <li><b>Tested ceiling (B)</b> and <b>long base (C)</b>: need "swing point" detection, the first genuinely hard algorithm. Great second milestone.</li>
+    <li><b>P&amp;F resistance (D)</b>: comes for free once you build the P&amp;F chart engine.</li>
+  </ul></div>
+  <div class="cons"><h4>Skip for now</h4><ul>
+    <li><b>Tightening (VCP)</b>: experienced traders disagree on what it looks like, so it's hard to code fairly.</li>
+    <li><b>Sector breakouts</b>: needs a reliable stock-to-sector map.</li>
+    <li><b>Fundamentals</b>: needs a separate earnings data source.</li>
+  </ul></div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">Untick anything you'd rather drop, then say "go" (or what to change) in the chat.</p>

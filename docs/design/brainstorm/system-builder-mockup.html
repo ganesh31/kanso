@@ -1,0 +1,71 @@
+<h2>The three screens, as I picture them</h2>
+<p class="subtitle">Rough wireframes, not final design. Check the <b>flow</b>: does this match how you'd use it? Grey italic text = my proposed defaults.</p>
+
+<h3>1 · System Builder: "if I had traded this rule since 2005, what happens?"</h3>
+<div class="mockup">
+  <div class="mockup-header">Kanso › System Builder</div>
+  <div class="mockup-body" style="display:flex;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:260px">
+      <div class="label">Stocks</div>
+      <div class="mock-input" style="margin-bottom:10px">Nifty 500 &nbsp;▾</div>
+      <div class="label">Entry: when to buy</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Close is highest in <b>[ 3 ]</b> years</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">☑ AND weekly close above the level</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">☑ AND volume ≥ <b>[ 2× ]</b> 50-day average</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">☑ AND beat Nifty over <b>[ 6 ]</b> months</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:10px">☑ AND ≤ <b>[ 8% ]</b> above the old high</div>
+      <div class="label">Exit: when to sell</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Stop-loss: <b>[ 8% ]</b> below buy price <i style="color:#888">(caps the loss if the breakout fails)</i></div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:10px">Ride the trend: sell when weekly close &lt; <b>[ 30-week ]</b> average <i style="color:#888">(lets winners run)</i></div>
+      <button class="mock-button">Run backtest</button>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <div class="label">Results (2005 → today)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        <div class="placeholder">Trades: 412</div><div class="placeholder">Win rate: 38%</div>
+        <div class="placeholder">Avg win +31% / loss −7%</div><div class="placeholder">Worst drawdown −24%</div>
+      </div>
+      <div class="placeholder" style="height:110px">Equity curve: this system vs. just holding the Nifty</div>
+      <div style="margin-top:10px;border-left:3px solid #d29922;padding-left:8px;color:#bbb">
+        <b>Honesty panel</b><br>• Buys at <i>next day's open</i>, not the breakout price<br>• Includes brokerage + slippage<br>• ⚠ Uses today's Nifty 500 list: results flattered by survivors
+      </div>
+      <div class="placeholder" style="margin-top:10px">Trade list: click any trade → see it on the chart</div>
+    </div>
+  </div>
+</div>
+<p class="subtitle" style="margin-top:6px">(Numbers are made up, just to show the layout.)</p>
+
+<div class="split" style="margin-top:20px">
+  <div class="mockup">
+    <div class="mockup-header">2 · Scanner: "which stocks are doing it <i>today</i>?"</div>
+    <div class="mockup-body">
+      <div class="mock-input" style="margin-bottom:8px">Pattern: New 3-year high + my 4 filters ▾</div>
+      <div style="font-family:monospace;font-size:12px;line-height:1.8">
+        STOCK &nbsp;&nbsp;&nbsp;| OLD HIGH (DATE) &nbsp;| ABOVE | VOL<br>
+        ABCLTD &nbsp;&nbsp;| 1,240 (Jan 2023) | +2.1% | 3.4×<br>
+        XYZCORP &nbsp;| &nbsp;&nbsp;612 (Oct 2022) | +4.8% | 2.2×<br>
+        …
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">3 · Stock report: "what is <i>this</i> stock doing?"</div>
+    <div class="mockup-body">
+      <div class="mock-input" style="margin-bottom:8px">ABCLTD</div>
+      <div class="placeholder" style="height:70px">Chart with the old high drawn as a line</div>
+      <div style="margin-top:8px;line-height:1.7">
+        ✅ New 3-year high (old high 1,240, Jan 2023)<br>
+        ✅ Weekly close above the level<br>
+        ✅ Volume 3.4× average<br>
+        ❌ Lagging Nifty over 6 months (−3%)<br>
+        ✅ 2.1% above old high (not extended)
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:20px">Does this flow match how you'd use it?</h3>
+<div class="options">
+  <div class="option" data-choice="flow-yes" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Yes, this is it</h3><p>Build → test → scan today → check a stock</p></div></div>
+  <div class="option" data-choice="flow-change" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>Close, but change something</h3><p>Tell me what in the chat</p></div></div>
+</div>

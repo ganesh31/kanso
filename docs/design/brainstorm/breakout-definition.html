@@ -1,0 +1,50 @@
+<h2>What counts as a "multi-year breakout" to you?</h2>
+<p class="subtitle">Pick every shape you'd call one (more than one is fine). Each becomes a pattern in the library, so this decides what the scanner looks for first.</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="n-year-high" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>New N-year high</h3>
+      <svg viewBox="0 0 220 70" width="220" height="70"><polyline fill="none" stroke="#888" stroke-width="2" points="5,40 25,20 45,45 65,30 85,55 105,35 125,50 145,38 165,42 185,30 200,12 215,6"/><line x1="5" y1="20" x2="215" y2="20" stroke="#e5534b" stroke-dasharray="4 3"/><circle cx="196" cy="16" r="4" fill="#3fb950"/></svg>
+      <p>Close goes above the highest high of the last 3/5/10 years. One simple threshold, no shape required.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tested-ceiling" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Tested ceiling</h3>
+      <svg viewBox="0 0 220 70" width="220" height="70"><polyline fill="none" stroke="#888" stroke-width="2" points="5,55 30,18 55,48 85,19 110,50 140,18 165,45 190,30 205,14 215,6"/><line x1="5" y1="18" x2="215" y2="18" stroke="#e5534b" stroke-dasharray="4 3"/><circle cx="30" cy="18" r="3" fill="#e5534b"/><circle cx="85" cy="19" r="3" fill="#e5534b"/><circle cx="140" cy="18" r="3" fill="#e5534b"/><circle cx="208" cy="12" r="4" fill="#3fb950"/></svg>
+      <p>A level that rejected price 2+ times over the years finally gives way. Number of touches matters.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="long-base" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Long base / consolidation</h3>
+      <svg viewBox="0 0 220 70" width="220" height="70"><polyline fill="none" stroke="#888" stroke-width="2" points="5,62 25,30 40,22 55,40 70,32 85,42 100,34 115,40 130,30 145,36 160,28 175,32 190,26 205,14 215,6"/><rect x="40" y="22" width="150" height="22" fill="none" stroke="#e5534b" stroke-dasharray="4 3"/><circle cx="203" cy="16" r="4" fill="#3fb950"/></svg>
+      <p>A big earlier run, then years of sideways range (rectangle, cup), then price leaves the box. The base length is the point.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="pnf" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>P&amp;F multi-year resistance</h3>
+      <svg viewBox="0 0 220 70" width="220" height="70" font-family="monospace" font-size="10" fill="#888"><text x="20" y="20">X</text><text x="20" y="32">X</text><text x="20" y="44">X</text><text x="40" y="32">O</text><text x="40" y="44">O</text><text x="60" y="20">X</text><text x="60" y="32">X</text><text x="60" y="44">X</text><text x="80" y="32">O</text><text x="80" y="44">O</text><text x="80" y="56">O</text><text x="100" y="20">X</text><text x="100" y="32">X</text><text x="100" y="44">X</text><text x="100" y="56">X</text><text x="100" y="8" fill="#3fb950">X</text><line x1="10" y1="12" x2="120" y2="12" stroke="#e5534b" stroke-dasharray="4 3"/></svg>
+      <p>On a Point &amp; Figure chart, an X column clears a top that has held for years (double/triple-top buy at a multi-year level).</p>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:28px">What makes you trust one breakout more than another?</h3>
+<p class="subtitle">Pick all that apply. These become the "quality" filters you can stack in the system builder.</p>
+<div class="options" data-multiselect>
+  <div class="option" data-choice="q-volume" onclick="toggleSelect(this)"><div class="letter">1</div><div class="content"><h3>Volume surge</h3><p>Breakout day/week volume well above average</p></div></div>
+  <div class="option" data-choice="q-close" onclick="toggleSelect(this)"><div class="letter">2</div><div class="content"><h3>Close confirmation</h3><p>Needs a weekly or monthly close above the level, not just an intraday poke</p></div></div>
+  <div class="option" data-choice="q-tight" onclick="toggleSelect(this)"><div class="letter">3</div><div class="content"><h3>Tightening before the break</h3><p>Swings get smaller near the ceiling (VCP-style)</p></div></div>
+  <div class="option" data-choice="q-rs" onclick="toggleSelect(this)"><div class="letter">4</div><div class="content"><h3>Relative strength</h3><p>Stock beating Nifty / its sector over recent months</p></div></div>
+  <div class="option" data-choice="q-sector" onclick="toggleSelect(this)"><div class="letter">5</div><div class="content"><h3>Sector breaking out too</h3><p>Several stocks in the same sector clearing old highs together</p></div></div>
+  <div class="option" data-choice="q-not-extended" onclick="toggleSelect(this)"><div class="letter">6</div><div class="content"><h3>Not extended yet</h3><p>Still within a few % of the level, so the stop is close</p></div></div>
+  <div class="option" data-choice="q-fundamentals" onclick="toggleSelect(this)"><div class="letter">7</div><div class="content"><h3>Fundamentals</h3><p>Earnings / sales growth behind the move</p></div></div>
+</div>
+<p class="subtitle" style="margin-top:16px">Anything missing, or a shape you'd describe differently? Tell me in the chat.</p>

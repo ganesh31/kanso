@@ -1,0 +1,49 @@
+//@version=6
+// Kanso V0: N-year-high breakout, daily mode. Throwaway reference, not part of V1.
+// Use on a DAILY chart of an NSE stock.
+// Known differences from the Kanso spec:
+//  - Trend exit fills at the open of the 2nd trading day of the next week (Pine acts on the next bar), not the 1st.
+//  - The stop fills at the stop price, or at the open if the price gaps through it (Pine's default stop behaviour).
+//  - Costs are one combined commission % per side; slippage is folded into it.
+//  - Single stock only; no portfolio slots / RS ranking.
+strategy("Kanso V0 - N-year high breakout", overlay = true,
+     initial_capital = 1000000, default_qty_type = strategy.percent_of_equity, default_qty_value = 100,
+     commission_type = strategy.commission.percent, commission_value = 0.30, max_bars_back = 5100)
+
+years    = input.int(3, "Lookback (years)", minval = 1, maxval = 20)
+useVol   = input.bool(true, "Filter: volume surge")
+volK     = input.float(2.0, "  Volume ≥ k × 50-day avg", step = 0.1)
+useRS    = input.bool(true, "Filter: beat benchmark")
+rsBars   = input.int(126, "  RS lookback (bars)")
+bench    = input.symbol("NSE:NIFTY", "  Benchmark")
+useExt   = input.bool(true, "Filter: not extended")
+maxExt   = input.float(8.0, "  Max % above level")
+stopPct  = input.float(8.0, "Stop-loss %")
+smaWeeks = input.int(30, "Trend exit: weekly SMA length")
+
+L       = years * 252
+level   = ta.highest(high, L)[1]
+benchC  = request.security(bench, timeframe.period, close)
+rs      = (close / close[rsBars] - 1) - (benchC / benchC[rsBars] - 1)
+volOK   = volume >= volK * ta.sma(volume, 50)[1]
+extOK   = close <= level * (1 + maxExt / 100)
+
+rule   = bar_index > L and close > level and (not useVol or volOK) and (not useRS or rs > 0) and (not useExt or extOK)
+signal = rule and not rule[1]
+
+// Entry: the order is placed on the signal bar and fills at the next bar's open.
+if signal and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if strategy.position_size > 0
+    strategy.exit("Stop", "Long", stop = strategy.position_avg_price * (1 - stopPct / 100))
+
+// Trend exit on the last COMPLETED week (non-repainting idiom).
+wClose  = request.security(syminfo.tickerid, "W", close[1], lookahead = barmerge.lookahead_on)
+wSma    = request.security(syminfo.tickerid, "W", ta.sma(close, smaWeeks)[1], lookahead = barmerge.lookahead_on)
+newWeek = ta.change(time("W")) != 0
+if strategy.position_size > 0 and newWeek and wClose < wSma
+    strategy.close("Long", comment = "Trend exit")
+
+plot(level, "Breakout level", color = color.new(color.red, 0), style = plot.style_stepline)
+plotshape(signal, "Signal", shape.triangleup, location.belowbar, color.green, size = size.small)

@@ -1,0 +1,24 @@
+# Brainstorming companion
+.superpowers/
+
+# V0 (throwaway) local outputs
+v0/.venv/
+v0/out/
+v0/nifty50.csv
+__pycache__/
+
+# Web
+web/node_modules/
+web/dist/
+
+# Data
+*.duckdb
+*.duckdb.wal
+
+# Tools
+tools/vbt-benchmark/.venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

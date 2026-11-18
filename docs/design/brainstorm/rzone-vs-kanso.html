@@ -1,0 +1,55 @@
+<h2>How RZone's System Builder works vs. what I sketched for Kanso</h2>
+<p class="subtitle">Left side is redrawn as a wireframe from Definedge's public help article "How to use System Builder in TradePoint or RZone" (real screenshots are in the other browser tab). Right side is the Kanso sketch from before.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">RZone: 3 separate places</div>
+    <div class="mockup-body" style="line-height:1.6">
+      <div class="label">① System Builder: define the filter</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Chart type ▾ <b>OHLC</b> (or Renko / P&amp;F / …) → <b>Create System</b></div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Name: <i>50 Day SMA and RSI above 50</i><br>Description: …</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Conditions &nbsp;<button class="mock-button" style="padding:2px 8px">ADD</button><br>
+        <span style="color:#bbb">pop-up: ○ Indicator ○ Pattern → pick from long dropdown → fill Input / Period / Type</span><br>
+        1. Price above SMA(50)<br>2. RSI(14) above 50</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:10px">Expression: <span style="font-family:monospace">[ 1 and 2 ]</span> &nbsp; <i style="color:#888">(you type it)</i> → Save</div>
+      <div class="label">② Scanner: run it</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:10px">EOD Scanner → Market NSE ▾ → Scrip group ▾ → Type: <i>User Defined System</i> ▾ → pick yours → Scan</div>
+      <div class="label">③ Back Testing: separate menu item</div>
+      <div class="placeholder">Test a system over history</div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Kanso sketch: 1 place</div>
+    <div class="mockup-body" style="line-height:1.6">
+      <div class="label">Build, test and scan on one screen</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Stocks: Nifty 500 ▾</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Close is highest in <b>[3]</b> years<br>☑ AND weekly close above level<br>☑ AND volume ≥ <b>[2×]</b><br>☑ AND beat Nifty <b>[6]</b> mo<br>☑ AND ≤ <b>[8%]</b> above old high</div>
+      <div style="border:1px solid #444;border-radius:6px;padding:8px;margin-bottom:6px">Exit: stop <b>[8%]</b> · trail <b>[30-wk]</b> average</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px"><button class="mock-button">Backtest</button><button class="mock-button">Scan today</button></div>
+      <div class="placeholder">Results + honesty panel + trade list</div>
+      <div class="label" style="margin-top:10px">Stock report (the reverse direction)</div>
+      <div class="placeholder">Every pattern this stock is in now, with ✅/❌ evidence</div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:20px">What to borrow, what to do differently</h3>
+<div class="pros-cons">
+  <div class="pros"><h4>Borrow from RZone</h4><ul>
+    <li><b>Numbered conditions + an expression</b> (<span style="font-family:monospace">1 and (2 or 3)</span>). It allows OR and brackets, which my all-AND sketch can't. I'd keep plain-English blocks but add this as an "advanced" box.</li>
+    <li><b>Indicators and patterns in one picker.</b> RZone even has a "High above previous N bars" pattern. That's our N-year high (3 years ≈ 750 trading days).</li>
+    <li><b>Saved, named systems</b> you can reuse in the scanner.</li>
+  </ul></div>
+  <div class="cons"><h4>Do differently</h4><ul>
+    <li><b>Exits live inside the system.</b> In RZone a system is a filter; when to sell is set elsewhere. A breakout system without exits can't be judged.</li>
+    <li><b>One screen, not three menus.</b> Same rule → backtest and scan with one click each.</li>
+    <li><b>Show the honesty assumptions</b> (fill price, costs, survivors) next to the results.</li>
+    <li><b>Stock report explains <i>why</i></b>: the evidence behind each ✅/❌.</li>
+  </ul></div>
+</div>
+
+<h3 style="margin-top:20px">Want the OR / brackets "advanced expression" box in version 1?</h3>
+<div class="options">
+  <div class="option" data-choice="expr-later" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>Later (my pick)</h3><p>V1 = AND-only toggles, simplest to build and use. Add expressions in V2.</p></div></div>
+  <div class="option" data-choice="expr-now" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>In V1</h3><p>More flexible from day one; a bit more to build and test.</p></div></div>
+</div>
