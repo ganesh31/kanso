@@ -7,10 +7,13 @@
 //  - Costs are one combined commission % per side; slippage is folded into it.
 //  - Single stock only; no portfolio slots / RS ranking.
 strategy("Kanso V0 - N-year high breakout", overlay = true,
-     initial_capital = 1000000, default_qty_type = strategy.percent_of_equity, default_qty_value = 100,
-     commission_type = strategy.commission.percent, commission_value = 0.30, max_bars_back = 5100)
+     // 90% of equity, not 100%: the order is sized at the signal bar's close but fills at the next open.
+     // On a gap-up open, a 100% order costs more than the cash available and TradingView silently skips it.
+     initial_capital = 1000000, default_qty_type = strategy.percent_of_equity, default_qty_value = 90,
+     commission_type = strategy.commission.percent, commission_value = 0.30, max_bars_back = 5000)
 
-years    = input.int(3, "Lookback (years)", minval = 1, maxval = 20)
+// Pine caps history references at 5,000 bars, so the lookback stops at 19 years (19 × 252 = 4,788 bars).
+years    = input.int(3, "Lookback (years)", minval = 1, maxval = 19)
 useVol   = input.bool(true, "Filter: volume surge")
 volK     = input.float(2.0, "  Volume ≥ k × 50-day avg", step = 0.1)
 useRS    = input.bool(true, "Filter: beat benchmark")

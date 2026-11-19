@@ -8,9 +8,24 @@ Fixed test date: `YYYY-MM-DD`
 | | |
 
 ## TradingView Strategy Tester (daily, defaults)
-| Symbol | Trades | Win rate | Net % | Max DD | Entry dates |
+| Symbol | Trades | Win rate | Avg win / loss | Max DD | Entry dates |
 |---|---|---|---|---|---|
-| | | | | | |
+| DIVISLAB (run 1, 100% sizing) | 11 real + 2 junk | 45% | +15.0% / −5.9% | — | 2007-05-30, 2015-08-20, 2016-08-17, 2018-10-30, 2020-02-07, 2020-07-31, 2021-05-03, 2024-09-11, 2025-05-20, 2026-08-04 (open) |
+
+### DIVISLAB: TradingView vs hand calculation (2024 →)
+| Trade | Hand calc (Kanso rules) | TradingView | Verdict |
+|---|---|---|---|
+| Sep 2024 breakout | buy 2024-09-11 @ 5,410 → trend exit 2025-03-03 @ 5,480, +0.8% | 2024-09-11 @ 5,405 → 2025-03-04 @ 5,500, +1.15% | ✅ Match. Exit is 1 day later, a known Pine quirk. |
+| May 2025 re-entry | buy 2025-05-20 @ 6,587 → stop 2025-08-06 @ 6,060, −8.5% | 2025-05-20 @ 6,580 → stop 2025-08-07 @ 6,053, −8.56% | ✅ Close. The stop is 1 day apart because Kanso measures the stop from the fill *including* slippage, so its stop sits slightly higher. |
+| Jul 2026 breakout | buy 2026-07-15 @ 7,267, still open, +52.7% | **No trade.** Bought 2026-08-04 @ 8,451 instead | ❌ TradingView skipped it (see below) |
+
+**Why TradingView skipped Jul 2026:** the order was sized at 100% of equity at the signal day's close, but it fills at the next open, which gapped up. The order cost more than the available cash, so TradingView silently dropped it. The two junk trades (#4: 8 shares, #7: 1 share, entry = exit on the same day, −0.6%) are artifacts of the same problem. Fixed in the script by sizing at 90%.
+
+**Re-run at 90% sizing:** 13 trades (12 closed plus 1 open since 2026-07-15 @ 7,260 ✅). The junk trades are gone. **Four real trades reappeared** that 100% sizing had silently dropped: 2006-09-05 (−13.5%), 2006-11-15 (−9.2%), 2015-08-11 (+1.7%, which replaced the 2015-08-20 −8.6% trade) and 2020-04-13 (−12.5%). The 2007 trade now enters a week earlier (2007-05-23 @ 200, not 2007-05-30 @ 250) and makes +88.4% instead of +50.7%.
+
+| DIVISLAB (run 2, 90% sizing) | 12 closed + 1 open | 50% | +25.0% / −10.1% | — | expectancy ≈ +7.4% per trade |
+
+Two losses exceed the 8% stop (−13.5% in Sep 2006, −12.5% in Jul 2020). A **gap through the stop** means the price opened below the stop level, so the exit filled at the worse open. Kanso models this the same way (§5.4).
 
 ## vectorbt (Nifty 50, defaults)
 - Trades / win rate / CAGR / max DD:
@@ -32,4 +47,12 @@ Fixed test date: `YYYY-MM-DD`
 -
 
 ## Changes to make in the V1 spec
--
+- **Consider a "minimum age of the old high" filter** (e.g. ≥ 1 year / 252 bars). Without it, most "new 3-year highs" are continuation highs in stocks that are already rising: DIVISLAB triggered 8 times in 6 months. One data point in favour: DIVISLAB's May 2025 re-entry (old high only about 5 months old) was the losing trade. Decide with more data.
+- **Add a test: entry on a gap-up open still fills.** Size the position at the *fill* price (next open), never at the signal close. TradingView gets this wrong at 100% sizing (see above). The Kanso spec already sizes at the fill (§5.6), so this test pins that down.
+- **Note in the README:** after an exit, re-entry needs the rule to turn false and then true again (edge-triggered). If an exit happens while the price is still above the level, there's no re-entry until a fresh breakout.
+
+## Lessons so far (domain)
+- Stop-loss: INFY and TCS (2024 breakouts) lost −8.5% each under Kanso rules, against −42% for buy-and-hold.
+- Breakout systems win less than half the time, but winners are about 2.5× losers (DIVISLAB: 45% win rate, +15.0% / −5.9%).
+- Exits cost upside: DIVISLAB's Sept 2024 trade exited at +0.8% before the stock doubled. Re-entries (May 2025 −8.5%, Jul 2026 +52.7%) got some of it back: about +41% compounded vs +106% buy-and-hold.
+- Volume matters: INFY's failed Sept 2024 breakout came on 0.73× average volume.

@@ -2,6 +2,8 @@
 
 **Purpose.** Before writing Kanso, use existing tools to (1) learn what multi-year breakouts look like, (2) feel what each Kanso screen should do, and (3) record **reference answers** that V1's Go engine will be checked against.
 
+**New to the terms?** Keep [`glossary.md`](glossary.md) open, a plain-English cheat sheet of the trading jargon.
+
 **Rules**
 - **Time-box: 3 days.** If a tool won't install in ~1 hour, skip it and note why.
 - Everything in `v0/` is **throwaway**. V1 never imports it, copies it, or depends on it. We rebuild ideas, not code.
