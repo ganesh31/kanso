@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { configureApi, type Report } from "@/api/client";
 import { StockReport } from "./StockReport";
 
@@ -81,7 +81,10 @@ describe("StockReport", () => {
         const req = input as Request;
         const path = new URL(req.url).pathname;
         if (path.startsWith("/api/bars/")) {
-          return json(200, { symbol: "X", bars: [{ date: "2024-09-10", open: 1, high: 1, low: 1, close: 1, volume: 1 }] });
+          return json(200, {
+            symbol: "X",
+            bars: [{ date: "2024-09-10", open: 1, high: 1, low: 1, close: 1, volume: 1 }],
+          });
         }
         const symbol = decodeURIComponent(path.replace("/api/report/", ""));
         const res = report(symbol, await req.json());
@@ -96,7 +99,9 @@ describe("StockReport", () => {
     report.mockReturnValueOnce({ status: 200, body: breakout });
     const { unmount } = renderReport("DIVISLAB");
     expect(await screen.findByText("✅")).toBeInTheDocument();
-    expect(screen.getByText(/Old high 4,105.20 set 2021-10-25, 2 years 10 months ago \(717 bars\)/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Old high 4,105.20 set 2021-10-25, 2 years 10 months ago \(717 bars\)/),
+    ).toBeInTheDocument();
     unmount();
 
     report.mockReturnValueOnce({ status: 200, body: tooNew });
@@ -118,7 +123,10 @@ describe("StockReport", () => {
   });
 
   test("unknown symbol shows the API error", async () => {
-    report.mockReturnValueOnce({ status: 404, body: { title: "Not Found", status: 404, detail: "unknown symbol NOPE" } });
+    report.mockReturnValueOnce({
+      status: 404,
+      body: { title: "Not Found", status: 404, detail: "unknown symbol NOPE" },
+    });
     renderReport("NOPE");
     expect(await screen.findByRole("alert")).toHaveTextContent("unknown symbol NOPE");
   });

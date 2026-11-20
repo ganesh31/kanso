@@ -75,13 +75,13 @@ Kanso is a web tool for finding and testing **multi-year breakouts** in Indian e
 | Export | Parquet via `parquet-go`, output only (oracle fixture, exports) | 0002 |
 | Ingest | separate `cmd/ingest` process; launchd 18:30 IST + 08:00 retry | — |
 | Contract | OpenAPI → `orval` (typed fetch functions + TanStack Query hooks); Evidence is a discriminated union | 0003 |
-| Web | React 19, Vite, **TanStack Router** (typed URL state), **TanStack Query**, `useReducer` builder draft | — |
+| Web | React 19, **Vite+** (Vite, Vitest, Oxlint, Oxfmt in one `vp` CLI), **TanStack Router** (typed URL state), **TanStack Query**, `useReducer` builder draft | — |
 | UI | Tailwind v4, shadcn/ui, TanStack Table; dark default | — |
 | Charts | TradingView Lightweight Charts for price **and** equity (attribution logo kept on) | — |
 | Numbers | float64 prices/money, int64 quantities | 0004 |
 | Hosting | Google Cloud Run, DB baked into image, max 1 instance | — |
 | CI/CD | GitHub Actions (race tests, lint, API staleness, vitest, Playwright interviewer flow), deploy on main via Workload Identity Federation; CodeRabbit PR review | — |
-| Tooling | Node 26 + pnpm, TypeScript 7, go-cmp, Makefile, gofumpt, golangci-lint, eslint + prettier | — |
+| Tooling | Node 26 + pnpm, TypeScript 7, go-cmp, Makefile, gofumpt, golangci-lint, Vite+ `vp check` (Oxfmt + type-aware Oxlint + type check) | — |
 | Repo | Public, MIT | — |
 
 ## 5. Domain definitions (precise)

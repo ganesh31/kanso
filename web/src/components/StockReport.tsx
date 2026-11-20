@@ -24,7 +24,9 @@ export function StockReport({ symbol, asOf }: { symbol: string; asOf?: string })
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{r.symbol}</h1>
-        <span className="text-muted-foreground text-sm">{r.as_of ? `as of ${r.as_of}` : "no data on or before that date"}</span>
+        <span className="text-muted-foreground text-sm">
+          {r.as_of ? `as of ${r.as_of}` : "no data on or before that date"}
+        </span>
         {r.level !== undefined && (
           <span className="text-level text-sm">
             Breakout level {formatPrice(r.level)}

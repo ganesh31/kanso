@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import type { Evidence, EvidenceType, ReportLine } from "@/api/client";
 import { EvidenceList, describeEvidence } from "./EvidenceList";
 
@@ -29,8 +29,7 @@ function line(evidence: Evidence, pass: boolean): ReportLine {
 describe("EvidenceList", () => {
   test("EvidenceList handles every evidence type", () => {
     const expected: Record<EvidenceType, string> = {
-      n_year_high:
-        "Old high 1,240.00 set 2023-01-12, 1 year 10 months ago (372 bars); close 1,266.10, 2.10% above",
+      n_year_high: "Old high 1,240.00 set 2023-01-12, 1 year 10 months ago (372 bars); close 1,266.10, 2.10% above",
       not_evaluable: "not evaluable (insufficient history)",
     };
     for (const [type, ev] of Object.entries(fixtures) as [EvidenceType, Evidence][]) {

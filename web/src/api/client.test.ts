@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 import { ApiError, configureApi, getBars, stockReport } from "./client";
 
 function respond(status: number, body: unknown) {

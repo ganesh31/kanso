@@ -8,11 +8,12 @@ test:
 
 # Web unit tests (Vitest).
 test-web:
-	cd web && pnpm exec vitest run
+	cd web && pnpm exec vp test
 
 lint:
 	golangci-lint run
 	test -z "$$(gofumpt -l .)"
+	cd web && pnpm exec vp check
 
 # Regenerate the OpenAPI spec from the Go handlers and the TypeScript client (orval) from it.
 api:
