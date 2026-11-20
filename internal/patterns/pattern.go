@@ -33,6 +33,7 @@ type Pattern interface {
 	Eval(ctx *Context, p Params, t int) Result
 }
 
-func notEvaluable(reason Reason) Result {
+// NotEvaluableResult is a failing, not-evaluable result with a reason.
+func NotEvaluableResult(reason Reason) Result {
 	return Result{Evidence: NotEvaluable{Type: TypeNotEvaluable, Reason: reason}}
 }

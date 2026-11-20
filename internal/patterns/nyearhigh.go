@@ -73,15 +73,15 @@ func (NYearHigh) Prepare(ctx *Context, p Params) error {
 func (NYearHigh) Eval(ctx *Context, _ Params, t int) Result {
 	s := ctx.Series
 	if t < 0 || t >= s.Complete {
-		return notEvaluable(ReasonIncompleteBar)
+		return NotEvaluableResult(ReasonIncompleteBar)
 	}
 	idx := ctx.LevelIdx[t]
 	if idx < 0 {
-		return notEvaluable(ReasonInsufficientHistory)
+		return NotEvaluableResult(ReasonInsufficientHistory)
 	}
 	level := ctx.Level[t]
 	if level <= 0 {
-		return notEvaluable(ReasonZeroDenominator)
+		return NotEvaluableResult(ReasonZeroDenominator)
 	}
 	c := s.Bars[t].Close
 	return Result{
