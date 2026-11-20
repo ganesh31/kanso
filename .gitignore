@@ -22,3 +22,11 @@ tools/vbt-benchmark/.venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Kanso V1
+web/test-results/
+web/playwright-report/
+*.db
+*.db-wal
+*.db-shm
+/bin/
