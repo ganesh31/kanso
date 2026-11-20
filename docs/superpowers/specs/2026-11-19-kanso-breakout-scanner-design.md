@@ -40,6 +40,7 @@ Kanso is a web tool for finding and testing **multi-year breakouts** in Indian e
 - **Approaching breakout** watch list: stocks within a few % *below* their multi-year high (like PKScreener's scan 49).
 - **Plain-English rules**: type a rule in words and get editable condition blocks (like Chartink's Magic Filters).
 - **Breakouts-per-day chart**: how many stocks broke out each day, coloured by sector, to show when breakouts cluster.
+- **Draw a Pattern, history search**: search every stock at every past date for the drawn shape and show what happened next (forward 20/60-day returns, counts not rates). It builds on the post-V1 Draw a Pattern page (`2026-11-20-kanso-draw-a-pattern-design.md`).
 - **Delivery quantity**: NSE delivery data (shares taken into demat) as an extra "real buying" signal. Needs a second data source such as eod2/bhavcopy, with its volume re-adjusted for splits (V0 found eod2 volume unadjusted).
 
 **Anti-goals** — failure even if it "works"

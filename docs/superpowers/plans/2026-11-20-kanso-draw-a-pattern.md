@@ -1,0 +1,199 @@
+# Draw a Pattern Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** A fourth screen where the user sketches a price shape and gets the stocks whose latest 1/3/6-month closes match it best, with a match %.
+
+**Architecture:** A new pure-Go package `internal/shape` holds the resample → z-normalise → Pearson math and a `Match` function over `market.Provider`. A new endpoint, `POST /api/shape-match`, exposes it, and its types are generated with the existing tygo setup. The React screen `/draw` has a canvas sketcher and result cards that overlay each stock's normalised line on the sketch.
+
+**Tech Stack:** The same as V1: Go (std `net/http`, `errgroup`), tygo, React + TS, Vitest + React Testing Library. Mini charts are plain SVG *(plan call: no Lightweight Charts instance per card)*.
+
+**Spec:** `docs/superpowers/specs/2026-11-20-kanso-draw-a-pattern-design.md` (an add-on to `2026-11-19-kanso-breakout-scanner-design.md`).
+
+**Plan calls that differ from the spec's API sketch:**
+- The response adds `sketch` and per-match `shape`: the z-normalised 64 points, so the overlay shows exactly what was scored.
+- It also adds `stale`, `short` and `gapped`, so the UI can say why stocks were skipped.
+- Per-match `name` is dropped, because V1's `market.Instrument` has no name field.
+- `dates: [from, to]` becomes the two fields `from` and `to`.
+
+**Precondition:** V1 has shipped. This plan uses V1's `market`, `api` and `web` packages exactly as V1's plan (`2026-11-19-kanso-v1.md`) defines them. If a V1 name differs in the real code, use the real name.
+
+## Global Constraints
+
+- Everything in V1's Global Constraints applies: module `kanso`, `market.Date` strings, determinism, no network, Python or DuckDB in tests, and exact-pinned npm deps.
+- Windows: `"1m"` = 21, `"3m"` = 63, `"6m"` = 126 daily bars. The default is `"3m"`.
+- Resample length N = 64. Match % = `round(max(0, r) × 100)`. Matches scoring 0 are left out.
+- `limit` defaults to 10, with a maximum of 25.
+- Labels: Strong ≥ 80, Loose 50–79, Weak < 50 (Weak cards are shown greyed out).
+- Benchmark/as-of: the latest `^NSEI` bar. Stale = the instrument's last bar is older than that.
+- Copy, verbatim: "Shape match only; past shape says nothing about what comes next."
+- The demo rate limit applies to `/api/shape-match` like the other read endpoints.
+
+## Review Focus
+
+1. **Garbage sketch values** (NaN, ±Inf, fewer than 2 points, over 1,000 points). Expected: 400 with a field error, never a panic or a NaN score. Tested in Task 3, `TestShapeMatchRejectsBadPoints`.
+2. **A flat sketch** (a straight horizontal line). Expected: 400 "sketch is flat", not a division by zero. Tested in Task 1, `TestScoreFlatSketchErrors`, and Task 3.
+3. **A data gap inside the window** (a stock suspended for a week within the last 3 months). Expected: skipped and counted, never matched across the gap. Tested in Task 2, `TestMatchSkipsGapInWindow`.
+4. **Every stock too short or stale** (for example a 6-month window on a tiny fixture). Expected: 200 with empty `matches` and the counts filled in, and the UI says "No matches" plus the counts. Tested in Task 2, `TestMatchAllShortGivesEmptyNotError`, and Task 4.
+5. **A sketch that covers too little width** (one click, or a stroke over less than 80% of the canvas). Expected: Find stays disabled with the hint "Draw across most of the box". Tested in Task 4, `test("Find disabled until sketch covers 80%")`.
+
+---
+
+## File Structure
+
+```
+internal/shape/math.go      # Resample, ZNorm, Pearson, Score
+internal/shape/match.go     # Request, Result, Match over market.Provider
+internal/shape/*_test.go
+internal/api/handlers.go    # + shapeMatch handler (modify)
+internal/api/server.go      # + route (modify)
+tygo.yaml                   # + internal/shape (modify)
+web/src/components/SketchCanvas.tsx
+web/src/components/ShapeCard.tsx
+web/src/screens/DrawPattern.tsx
+web/src/api/client.ts       # + api.shapeMatch (modify)
+web/src/components/Layout.tsx, web/src/main.tsx  # + /draw route and nav link (modify)
+```
+
+---
+
+### Task 1: Shape math
+
+**Files:**
+- Create: `internal/shape/math.go`
+- Test: `internal/shape/math_test.go`
+
+**Interfaces:**
+- Produces:
+  - `const N = 64`
+  - `var ErrFlat = errors.New("shape: series is flat")`
+  - `func Resample(xs []float64, n int) []float64`: linear interpolation at positions `i*(len(xs)-1)/(n-1)`. Output[0] = xs[0] and output[n-1] = xs[len-1]. It panics if `len(xs) < 2 || n < 2`, because callers validate first.
+  - `func ZNorm(xs []float64) ([]float64, error)`: `(x − mean)/std` using the population std. It returns `ErrFlat` when `std <= 1e-9 * max(1, |mean|)`.
+  - `func Score(sketch, closes []float64) (score int, sketchZ, closesZ []float64, err error)`: resample both to N, z-normalise both, compute Pearson r as `Σ(a·b)/N` of the z-series, and return `int(math.Round(math.Max(0, r) * 100))`. If the sketch is flat, it returns `ErrFlat`. If the closes are flat, it returns score 0 with no error, so the caller drops it.
+
+- [ ] **Step 1: Write failing tests**
+
+```go
+func TestResampleKeepsEndpointsAndLength(t *testing.T) // [0,10] → n=5 → [0,2.5,5,7.5,10]
+func TestResampleDownsamples(t *testing.T)             // 126 linear points → 64 points, still linear (diffs equal to 1e-9)
+func TestZNormMeanZeroStdOne(t *testing.T)             // [1,2,3,4] → mean 0, pop std 1 (1e-12)
+func TestScoreIdenticalIs100(t *testing.T)             // sketch == closes (63 pts, non-linear) → 100
+func TestScoreScaledShiftedIs100(t *testing.T)         // closes = 3*sketch + 500 → 100
+func TestScoreInvertedIs0(t *testing.T)                // closes = -sketch → 0
+func TestScoreDifferentLengths(t *testing.T)           // sketch 300 pts of sin, closes 63 pts of same sin → ≥ 99
+func TestScoreFlatSketchErrors(t *testing.T)           // all 5.0 → errors.Is(err, ErrFlat)
+func TestScoreFlatClosesIsZero(t *testing.T)           // closes all 100 → score 0, err nil
+```
+
+- [ ] **Step 2: Run** `go test ./internal/shape/...`. Expected: FAIL (undefined: Resample).
+- [ ] **Step 3: Implement** the three functions in `math.go`.
+- [ ] **Step 4: Run** `go test ./internal/shape/...`. Expected: PASS.
+- [ ] **Step 5: Commit** `feat(shape): resample, z-normalise and correlation score`
+
+### Task 2: Matching over a stock list
+
+**Files:**
+- Create: `internal/shape/match.go`
+- Test: `internal/shape/match_test.go` (uses `market.NewMemProvider`)
+
+**Interfaces:**
+- Consumes: Task 1; `market.Provider`, `market.NewDaily`, `(*Series).MarkGaps`, `(*Series).GapsIn` (V1 Task 2).
+- Produces:
+  - `type Window string` with consts `OneMonth="1m"`, `ThreeMonths="3m"`, `SixMonths="6m"`; `func (w Window) Bars() (int, bool)` → 21 / 63 / 126, false if unknown.
+  - `type Request struct { Points []float64 \`json:"points"\`; Window Window \`json:"window"\`; Universe string \`json:"universe"\`; Limit int \`json:"limit,omitempty"\` }`
+  - `type ShapeMatch struct { Symbol string \`json:"symbol"\`; Score int \`json:"score"\`; Closes []float64 \`json:"closes"\`; From market.Date \`json:"from"\`; To market.Date \`json:"to"\`; Shape []float64 \`json:"shape"\` }`. `Shape` is the stock's z-normalised N points, used for the overlay.
+  - `type Result struct { AsOf market.Date \`json:"as_of"\`; WindowBars int \`json:"window_bars"\`; Sketch []float64 \`json:"sketch"\`; Matches []ShapeMatch \`json:"matches"\`; Stale []string \`json:"stale"\`; Short []string \`json:"short"\`; Gapped []string \`json:"gapped"\` }`. `Sketch` is the sketch's z-normalised N points. Slices are never nil, so they serialise as `[]`.
+  - `func Match(ctx context.Context, prov market.Provider, req Request) (*Result, error)`. It returns `*rules.ValidationError`-style field errors via V1's `rules.ValidationError{Errors: []rules.FieldError}`, with paths `points`, `window`, `limit`. It returns `market.ErrNotFound` for an unknown universe.
+- Semantics:
+  - **Validation:** `points` must have 2 to 1,000 values, all finite. `window` must be known. `limit` 0 → 10, and it must be 1–25. A flat sketch gives a field error on `points` with the message "sketch is flat".
+  - **As-of:** the last `^NSEI` daily bar. The benchmark dates are the calendar used for `MarkGaps(cal, 5)`.
+  - **Per member**, loading `Daily(id, asOf − 400 calendar days, asOf)`:
+    - If the last bar date is before asOf, the stock goes in `Stale`.
+    - If it has fewer than `WindowBars` bars, it goes in `Short`.
+    - If `GapsIn(len−WindowBars, len−1) > 0`, it goes in `Gapped`.
+    - Otherwise it is scored on the last `WindowBars` closes.
+  - Members are processed in parallel with `errgroup`.
+  - **Ordering:** score descending, then symbol ascending. Score-0 matches are dropped, then the list is truncated to `Limit`. `Stale`, `Short` and `Gapped` are sorted.
+
+- [ ] **Step 1: Write failing tests**
+
+```go
+func TestMatchRanksByScoreThenSymbol(t *testing.T)      // 3 stocks: exact copy of sketch (AAA), noisy copy (BBB), inverted (CCC) → [AAA 100, BBB <100], CCC absent
+func TestMatchTieBreakBySymbol(t *testing.T)            // two identical series "ZED","ABC" → ABC first
+func TestMatchLimit(t *testing.T)                       // 5 matching stocks, Limit 2 → 2 matches
+func TestMatchExcludesStale(t *testing.T)               // last bar a day before ^NSEI's → Stale==["OLD"]
+func TestMatchSkipsGapInWindow(t *testing.T)            // 6 bench days missing inside last 63 → Gapped==["GAP"]; gap older than window → scored
+func TestMatchAllShortGivesEmptyNotError(t *testing.T)  // window 6m, all stocks 100 bars → err nil, Matches==[] (len 0, non-nil), len(Short)==n
+func TestMatchUsesLastWindowCloses(t *testing.T)        // From/To == dates of bars len-63 and len-1; len(Closes)==63; len(Shape)==64
+func TestMatchValidation(t *testing.T)                  // 1 point; NaN; 1001 points; window "2w"; limit 26; flat → each a FieldError on the right path
+func TestMatchUnknownUniverse(t *testing.T)             // errors.Is(err, market.ErrNotFound)
+```
+
+- [ ] **Step 2: Run** `go test ./internal/shape/...`. Expected: FAIL (undefined: Match).
+- [ ] **Step 3: Implement** `match.go`.
+- [ ] **Step 4: Run** `go test ./internal/shape/...`. Expected: PASS.
+- [ ] **Step 5: Commit** `feat(shape): match a sketch against a stock list`
+
+### Task 3: API endpoint and generated types
+
+**Files:**
+- Modify: `internal/api/server.go` (route), `internal/api/handlers.go` (handler), `internal/api/demo.go` (add to rate-limited set), `tygo.yaml` (add `internal/shape`)
+- Test: `internal/api/api_test.go`
+
+**Interfaces:**
+- Consumes: `shape.Match`, `shape.Request`, `shape.Result`; V1's error JSON shape `{"error", "fields"}`.
+- Produces: `POST /api/shape-match` → 200 `shape.Result`; 400 with `fields` for validation errors; 404 for an unknown universe; 429 in demo mode over the rate limit. `web/src/api/types.ts` gains the TS types `ShapeRequest`, `ShapeMatch` and `ShapeResult`. *(Plan call: the Go names `Request`/`Result` collide with the scan package's in the generated file, so either set a tygo `prefix: Shape` for the package or name the Go types `ShapeRequest`/`ShapeResult` in Task 2. Either way, the TS names above are fixed.)*
+
+- [ ] **Step 1: Write failing tests**
+
+```go
+func TestShapeMatchReturnsRankedMatches(t *testing.T) // MemProvider with AAA = copy of sketch → 200, matches[0].symbol=="AAA", score==100, as_of == ^NSEI last date
+func TestShapeMatchRejectsBadPoints(t *testing.T)     // points [1] → 400, fields[0].path=="points"; points [1,"NaN"] (raw JSON string) → 400; flat → 400 "sketch is flat"
+func TestShapeMatchUnknownUniverse404(t *testing.T)
+func TestShapeMatchDemoRateLimited(t *testing.T)      // Demo, RatePerMin 2 → 3rd 429
+```
+
+- [ ] **Step 2: Run** `go test ./internal/api/...`. Expected: FAIL (404 on route).
+- [ ] **Step 3: Implement** the route and handler. Decode with `DisallowUnknownFields`. A non-number in `points` is a 400 on `points`.
+- [ ] **Step 4: Run** `go test ./internal/api/... && make check-types`. The first check-types run will show a diff. Run `make types`, commit the regenerated file, then rerun. Expected: PASS.
+- [ ] **Step 5: Commit** `feat(api): POST /api/shape-match`
+
+### Task 4: Draw a Pattern screen
+
+**Files:**
+- Create: `web/src/components/SketchCanvas.tsx`, `web/src/components/ShapeCard.tsx`, `web/src/screens/DrawPattern.tsx`
+- Modify: `web/src/api/client.ts` (`api.shapeMatch(req: ShapeRequest): Promise<ShapeResult>`), `web/src/main.tsx` (route `/draw`), `web/src/components/Layout.tsx` (nav link "Draw a Pattern")
+- Test: `web/src/components/SketchCanvas.test.tsx`, `web/src/screens/DrawPattern.test.tsx`
+
+**Interfaces:**
+- Consumes: `api.shapeMatch`, `api.universes`, and the generated `ShapeRequest` / `ShapeMatch` / `ShapeResult`.
+- Produces:
+  - `export function sketchToPoints(cols: (number | null)[], height: number): number[] | null`. Pure and exported for tests. `cols[x]` is the last y drawn in pixel column x, or null. It returns null when the covered span (first to last non-null column) is under 80% of `cols.length`. Otherwise it linearly fills nulls between drawn columns, takes only the covered span, and flips to price-up (`height − y`).
+  - `<SketchCanvas width height onChange={(points: number[] | null) => void} />`: pointer events (mouse and touch), each column keeps its last y, and a Clear button.
+  - `export function label(score: number): "Strong" | "Loose" | "Weak"` (≥80, ≥50, else).
+  - `<ShapeCard match sketch onOpen />`: symbol, `score%`, `label`, and an SVG polyline of `sketch` (muted) under `match.shape` (accent), both drawn on the same y-scale. A Weak card has the class `weak` (greyed out). Clicking it navigates to `/report/:symbol`.
+  - **DrawPattern:**
+    - Controls: window picker (1m / 3m / 6m, default 3m), universe picker (default: the first universe), and a Find button. Find is disabled while `points === null` and shows the hint "Draw across most of the box".
+    - The header shows "as of <as_of>", plus the verbatim note from Global Constraints.
+    - Results: a grid of ShapeCards.
+    - Footer counts: "Skipped: n stale, n short history, n data gaps".
+    - If `matches` is empty, it shows "No matches" with those counts.
+    - An `ApiError` shows its message.
+
+- [ ] **Step 1: Write failing tests**
+
+```ts
+test("sketchToPoints returns null under 80% coverage")          // 100 cols, drawn 0..70 → null
+test("sketchToPoints fills gaps linearly and flips y")           // height 100; col0 y=100, col99 y=0, rest null → points[0]==0, points[99]==100, points[50]≈50.5
+test("Find disabled until sketch covers 80%")                    // render DrawPattern, no drawing → button disabled + hint visible
+test("sends window and universe with points")                    // mock api.shapeMatch; fire onChange with points; pick 6m → called with {window:"6m", universe, points}
+test("cards show score, label, and weak cards are greyed")      // mock result scores [92, 61, 30] → "Strong","Loose","Weak"; third has class weak
+test("empty matches shows No matches with skip counts")          // {matches:[], stale:["A"], short:["B","C"], gapped:[]} → "No matches", "1 stale, 2 short history, 0 data gaps"
+test("shows as-of date and the disclaimer")
+```
+
+- [ ] **Step 2: Run** `cd web && npx vitest run`. Expected: FAIL.
+- [ ] **Step 3: Implement** the components, screen, route and nav link. Use the dark-theme CSS variables already used by the other screens.
+- [ ] **Step 4: Run** `cd web && npx vitest run && npm run build`. Expected: PASS, and the build succeeds.
+- [ ] **Step 5: Manual check:** run the server against the demo snapshot. Draw a V on `/draw` with the 3m window, and check that the cards render with overlays, a card click opens the Stock Report, and a single click leaves Find disabled.
+- [ ] **Step 6: Commit** `feat(web): Draw a Pattern screen`
