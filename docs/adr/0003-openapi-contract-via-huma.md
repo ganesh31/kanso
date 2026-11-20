@@ -1,0 +1,3 @@
+# The API contract is OpenAPI generated from Go with huma
+
+The API is defined by typed Go input and output structs registered with huma v2, which runs on top of the standard `net/http` ServeMux. huma validates requests, returns 400 errors with field paths, and serves `/openapi.json` and a browsable `/docs` page. The web client's types and fetch functions are generated from that spec with `openapi-typescript` and `openapi-fetch`, and CI fails if they are stale. We chose this over `tygo` (types only, with a hand-written client and no contract) and over Connect-RPC (a heavier toolchain, and awkward for evidence unions). Evidence is a discriminated union, one struct per condition type, so the UI can narrow on `type`.

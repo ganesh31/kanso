@@ -65,7 +65,24 @@ Kanso is a web tool for finding and testing **multi-year breakouts** in Indian e
 | B. Single-language Streamlit app (Python) | Fastest, but generic look, limited interaction, author doesn't know Python | Rejected |
 | C. Fully in-browser (DuckDB-WASM, static hosting) | Free hosting, but tens of MB download and harder-to-test JS/WASM math | Rejected for V1 |
 
-**Language for A:** Python was the default habit for finance; rejected because the reasons (pandas, vectorbt, yfinance) don't apply once the engine is hand-written and the data is small. TypeScript end-to-end was the runner-up (shared types for free). **Go chosen** by the author; type sharing is solved with code generation (§7.6).
+**Language for A:** Python was the default habit for finance; rejected because the reasons (pandas, vectorbt, yfinance) don't apply once the engine is hand-written and the data is small. TypeScript end-to-end was the runner-up (shared types for free). **Go chosen** by the author; type sharing is solved with code generation (§7.6). Reconfirmed in the 2026-11-20 stack review (target: full-stack product roles in fintech, plus personal use); see `docs/adr/0001`.
+
+### 4.1 Tech stack *(stack review, 2026-11-20)*
+| Layer | Choice | ADR |
+|---|---|---|
+| Engine + API | Go 1.25, std `net/http` + **huma v2** (OpenAPI 3.1, `/docs`), `log/slog` JSON logs | 0001, 0003 |
+| Storage | **SQLite (WAL)** via pure-Go `modernc.org/sqlite`; **sqlc** queries, **goose** embedded migrations. No cgo. | 0002 |
+| Export | Parquet via `parquet-go`, output only (oracle fixture, exports) | 0002 |
+| Ingest | separate `cmd/ingest` process; launchd 18:30 IST + 08:00 retry | — |
+| Contract | OpenAPI → `openapi-typescript` + `openapi-fetch`; Evidence is a discriminated union | 0003 |
+| Web | React 19, Vite, **TanStack Router** (typed URL state), **TanStack Query**, `useReducer` builder draft | — |
+| UI | Tailwind v4, shadcn/ui, TanStack Table; dark default | — |
+| Charts | TradingView Lightweight Charts for price **and** equity (attribution logo kept on) | — |
+| Numbers | float64 prices/money, int64 quantities | 0004 |
+| Hosting | Google Cloud Run, DB baked into image, max 1 instance | — |
+| CI/CD | GitHub Actions (race tests, lint, API staleness, vitest, Playwright interviewer flow), deploy on main via Workload Identity Federation; CodeRabbit PR review | — |
+| Tooling | Node 22 + pnpm, go-cmp, Makefile, gofumpt, golangci-lint, eslint + prettier | — |
+| Repo | Public, MIT | — |
 
 ## 5. Domain definitions (precise)
 
@@ -91,12 +108,14 @@ A system runs on either **daily** bars or **weekly** bars (built from daily: ope
 ### 5.3 Filters
 | Filter | Default | Definition at bar t | Evidence |
 |---|---|---|---|
-| Volume surge | k = 2.0, window = 50 daily / 10 weekly | volume(t) ≥ k × mean(volume over prior `window` bars, excluding t) | ratio |
-| Relative strength | 6 months (126 daily / 26 weekly), benchmark Nifty 50 | return(stock, t−n→t) − return(benchmark, t−n→t) > 0 | both returns, difference |
+| Volume surge | k = 2.0, `window_weeks` = 10 (50 daily / 10 weekly bars) | volume(t) ≥ k × mean(volume over prior window bars, excluding t) | ratio |
+| Relative strength | `rs_months` = 6 (126 daily / 26 weekly bars), benchmark Nifty 50 | return(stock, t−n→t) − return(benchmark, t−n→t) > 0 | both returns, difference |
 | Not extended | x = 8% | close(t) ≤ level(t) × (1 + x) | % above level |
-| Old high age *(V0 finding; optional, not in the default system)* | min = 252 daily / 52 weekly bars (1 year) | bars since the level was set (t − level index) ≥ min | bars since, level date |
+| Old high age *(V0 finding; optional, not in the default system)* | `min_age_years` = 1 (252 daily / 52 weekly bars) | bars since the level was set (t − level index) ≥ min | bars since, level date |
 
 (Weekly close confirmation is the timeframe switch in §5.1.)
+
+**Calendar units** *(plan grill, 2026-11-20)*: every duration param is stored in calendar units and converted to bars per timeframe, so one saved value means the same thing on daily and weekly. Daily: week = 5, month = 21, year = 252 bars. Weekly: week = 1, month = round(52/12 × months), year = 52 bars. Ranges: `window_weeks` 1–52 (whole), `rs_months` 1–24 (whole), `min_age_years` 0.25–10 (step 0.25).
 
 **Why the old-high-age filter is optional** (V0 Day 3, Nifty 50, 2007–2026): with min = 1 year, trades were the best quality of any variation (+17.3% expectancy vs +11.1%, 45% win rate), but there were only 38 in 19 years, so a portfolio built on it sat mostly in cash (3.2% CAGR). Without it, most "new 3-year highs" are **continuation highs** in stocks that are already rising: the old high is days old, not years. So the level's age is **always shown as evidence** (Scanner column, Stock Report line), and the filter is there for users who want only base breakouts. V0 experiments also showed the volume, RS and not-extended filters changed results by under 1%/yr. **The defaults stay as specified**, so we don't overfit to one survivorship-biased sample.
 
@@ -107,13 +126,15 @@ A system runs on either **daily** bars or **weekly** bars (built from daily: ope
 
 ### 5.5 Entry signals and fills
 - Entry rule = ALL(required conditions) AND (ANY(group conditions) if the group exists and is non-empty).
-- A **signal** fires on bar t when the entry rule is true at t **and was false at t−1** (edge-triggered), and no position is open in that instrument.
+- A **signal** fires on bar t when the entry rule is true at t **and was evaluable and false at t−1** (edge-triggered). A not-evaluable t−1 (data gap, insufficient history, benchmark not yet started) never produces a signal, so no fake "fresh" signals appear after gaps or on the first evaluable bar. *(plan grill)*
+- In **single-stock mode** (trade-level stats), a signal is skipped while that stock's previous trade is open. In the **portfolio**, a signal is skipped only if the portfolio actually holds that symbol; a signal rejected for lack of slots does not hide later signals in the same stock. *(plan grill)*
 - **Fill:** next trading day's **open**, plus slippage.
 - **Costs:** one combined percentage per side (default 0.20% per side, covering brokerage + statutory charges) plus slippage (default 0.10% per side). Both configurable and shown in the honesty panel.
 
 ### 5.6 Portfolio simulation (equity curve)
 - Starting capital default ₹10,00,000; max concurrent positions default 10; each new position gets equal-weight capital = current equity / max positions (capped by available cash).
-- If more signals than free slots on a day: rank by relative-strength difference (desc), tie-break by symbol (asc) — deterministic.
+- **Whole shares** *(plan grill)*: quantity = floor(allocation / fill price incl. costs). If that is 0 (e.g. MRF above the slot size), the trade is skipped and listed in the honesty panel. Leftover cash stays as cash.
+- If more signals than free slots on a day: rank by the **6-month relative-strength difference** (desc), computed for ranking **whether or not RS is in the rule**, tie-break by symbol (asc) — deterministic. *(plan grill: otherwise rules without RS would silently rank alphabetically.)*
 - **Trade-level stats** (all signals, ignoring slot limits) are reported separately from **portfolio stats** so sizing doesn't hide how the pattern itself behaves.
 - Benchmark curve: buy-and-hold Nifty 50 with the same starting capital.
 
@@ -127,18 +148,23 @@ Portfolio: CAGR, max drawdown, final equity, exposure (% of time invested), vs. 
 - Data source and adjustment ("split-adjusted, not dividend-adjusted").
 - **Variations tested:** count of **distinct parameter sets** backtested for this system (re-running identical parameters doesn't count), with a one-line warning about overfitting when > 10. *(design call)* It is tracked client-side per system draft, saved or not, so it works on the stateless demo (§6.4).
 - **Actual data window:** the real first date used. Relative strength and the benchmark can't be evaluated before the benchmark's history starts (§6.1).
+- **Ranking rule:** "crowded days ranked by 6-month RS, then symbol".
+- **Skipped signals:** count and reasons, e.g. "1 signal skipped: price above slot size".
 
 ## 6. Data
 
 ### 6.1 Source
 - `Source` interface in Go; V1 implementation calls Yahoo Finance's public chart endpoint for `SYMBOL.NS` and index tickers (Nifty 50 = `^NSEI`). This endpoint is unofficial and may change or rate-limit; the loader must retry with backoff and fail loudly per symbol rather than writing partial data.
 - Yahoo's chart `close`/`open`/`high`/`low` are split-adjusted (not dividend-adjusted); use those. Store the raw response's split events too.
+- **Splits and bonuses on update** *(plan grill)*: Yahoo rescales all history after a split or bonus. An incremental update therefore re-fetches and replaces a symbol's **full** history when the response contains a split event in its window, **or** any of the overlapping stored closes differs from Yahoo's new value by more than 0.5% (this also catches bonuses and silent restatements).
 - Later implementations (not V1): NSE end-of-day bhavcopy files, a paid vendor.
 - **History start** *(design call)*: Yahoo's `^NSEI` history starts around Sept 2007, and some `.NS` stocks start late or have gaps. V1 accepts this. Backtests start from the latest of (requested start, benchmark start), and that date appears in the honesty panel. Relative strength is "not evaluable" before the benchmark's history starts. A gap of more than 5 consecutive missing trading days marks that instrument's bars across the gap as not evaluable. The "~20 years" claim becomes "since 2007" in the README.
 
 ### 6.2 Storage
-- DuckDB file. Tables: `instruments`, `bars_daily`, `universes`, `universe_members`, `systems`, `backtest_runs`, `ingest_log`.
+- **SQLite file in WAL mode** (pure-Go driver, `docs/adr/0002`). Tables: `instruments`, `bars_daily`, `splits`, `universes`, `universe_members`, `systems`, `backtest_runs`, `ingest_log`. Schema via goose migrations; queries via sqlc.
+- WAL lets the server read while the separate ingest process writes; writers use a busy timeout.
 - Weekly bars are computed on load in memory, not stored.
+- Parquet is an **export format only** (vectorbt fixture, data export), never read back as a source.
 
 ### 6.3 Stock lists (universes)
 - `universe_members(universe_id, instrument_id, from_date, to_date NULL)`.
@@ -146,9 +172,9 @@ Portfolio: CAGR, max drawdown, final equity, exposure (% of time invested), vs. 
 
 ### 6.4 Ingest
 - `cmd/ingest` — full backfill (from 2005-01-01) and incremental daily update; idempotent; records per-symbol status in `ingest_log`.
-- Personal use: run nightly via cron/launchd after market close.
+- Personal use: `cmd/ingest -update` runs as its own process from launchd at **18:30 IST** on weekdays, and again at **08:00 IST** the next morning only if instruments are still behind the benchmark (or the benchmark has no bar for the expected day). Demo mode never updates.
 - **Freshness** *(V0 finding)*: Yahoo can lag a day behind the NSE close (V0 saw Chartink with 2026-11-18 while Yahoo still ended at 2026-11-17). Ingest records each instrument's **latest bar date** and prints a summary: "data as of <benchmark's latest date>; N instruments behind". Every result screen shows **"as of <date>" taken from the data**, never from today's calendar. An instrument whose last bar is older than the benchmark's is reported as stale (scanner already excludes these).
-- Demo: a frozen DuckDB snapshot shipped with the deploy, server runs read-only.
+- Demo: a frozen SQLite snapshot baked into the container image (Cloud Run, max 1 instance so the per-IP rate limit holds); the server opens it read-only.
 - **Demo data scope** *(author's decision)*: the snapshot contains **only Nifty 50 constituents plus the `^NSEI` benchmark**, sourced from Yahoo. There is no bulk-download or raw-export endpoint in demo mode: `/api/bars` serves only the window needed for one chart, and responses are rate-limited. The UI footer and README credit the source and state that it's a non-commercial portfolio demo. Redistribution risk is accepted as low but nonzero, and the `Source` interface keeps the data swappable. Personal (non-demo) installs ingest the full Nifty 500.
 - **Demo writes** *(design call)*: the server is stateless in demo mode. `POST/PUT/DELETE /api/systems` return 403. Visitors' saved systems and variation counts live in the browser's localStorage. Backtest, scan and report calls are computations only, so no visitor data is ever stored server-side. A per-IP rate limit on backtests prevents abuse.
 
@@ -156,16 +182,16 @@ Portfolio: CAGR, max drawdown, final equity, exposure (% of time invested), vs. 
 
 ### 7.1 Overview
 ```
-React web app (Vite, TS)  ──HTTP/JSON──>  Go API server  ──>  engine packages  ──>  DuckDB
-                                           ^
-                         cmd/ingest ───────┘ (writes bars)
+React web app (Vite, TS)  ──HTTP/JSON──>  Go API server (huma)  ──>  engine packages  ──>  SQLite (WAL)
+   (embedded in the Go binary)      OpenAPI /docs                                     ^
+                                    launchd ──> cmd/ingest (separate process) ────────┘ writes bars
 ```
 
 ### 7.2 Go packages
 - `internal/market` — `Instrument` (exchange, symbol, type, lot size), `Bar`, series loading, weekly resampling.
-- `internal/data` — `Source` interface, Yahoo implementation, DuckDB repository.
+- `internal/data` — `Source` interface, Yahoo implementation, SQLite repository (sqlc + goose).
 - `internal/patterns` — each condition implements one interface:
-  `Evaluate(series, t, params) -> Result{Pass bool, Evaluable bool, Evidence map}` plus metadata (name, params with defaults/ranges, description) used by the UI and the report. V1: `NYearHigh`, `VolumeSurge`, `RelativeStrength`, `NotExtended`.
+  `Evaluate(series, t, params) -> Result{Pass bool, Evaluable bool, Evidence}` plus metadata (name, params with defaults/ranges, description) used by the UI and the report. **Evidence is typed per condition** (one struct per type, a discriminated union on `type` in the API). V1: `NYearHigh`, `VolumeSurge`, `RelativeStrength`, `NotExtended`, `LevelAge`.
 - `internal/rules` — rule tree (`Required []Condition`, `AnyGroup *[]Condition`), validation, evaluation, and **explain** (which conditions passed, which ANY branch matched).
 - `internal/backtest` — signal generation, `Executor` interface (V1: `EquityExecutor`), `CostModel` interface, portfolio simulation, metrics.
 - `internal/scan` — run a rule over a universe at the latest (or a given) date; parallel across instruments with goroutines.
@@ -181,8 +207,8 @@ React web app (Vite, TS)  ──HTTP/JSON──>  Go API server  ──>  engine
   "entry": {
     "all": [ {"type": "n_year_high", "params": {"years": 3}},
              {"type": "not_extended", "params": {"pct": 8}} ],
-    "any": [ {"type": "volume_surge", "params": {"k": 2, "window": 10}},
-             {"type": "relative_strength", "params": {"bars": 26, "benchmark": "^NSEI"}} ]
+    "any": [ {"type": "volume_surge", "params": {"k": 2, "window_weeks": 10}},
+             {"type": "relative_strength", "params": {"rs_months": 6, "benchmark": "^NSEI"}} ]
   },
   "exits": { "stop_pct": 8, "trend_sma_weeks": 30 },
   "costs": { "per_side_pct": 0.20, "slippage_pct": 0.10 },
@@ -198,7 +224,8 @@ Validation rejects unknown types, out-of-range params, and an `any` group with f
 - `POST /api/backtest` — body: system → results (metrics, equity + benchmark curves, trade list, honesty panel data, run id).
 - `POST /api/scan` — body: system (+ optional date) → matching instruments with evidence.
 - `POST /api/quickscan` — body: `{pattern, params?, universe, timeframe, date?, mode: "fresh"|"all"}` → same response shape as `/api/scan`. The server builds an ad-hoc entry rule `{all: [pattern]}` with no exits. If the pattern requires `breakout_level`, it auto-inserts `n_year_high` with default params, and the response says it did.
-- `GET /api/report/{symbol}?system=…` — evidence for every condition.
+- `POST /api/report/{symbol}` — body: `{system?, as_of?, timeframe?}` → evidence for every condition (all registered patterns with defaults when no system is given). POST with the full system, like scan and backtest, so it works in demo mode where saved systems live only in the browser. *(plan grill)*
+- `GET /openapi.json` and `GET /docs` — the API contract (huma, `docs/adr/0003`).
 - `GET /api/bars/{symbol}?from&to&timeframe` — chart data; trade markers come from the backtest result.
 
 ### 7.5 Web app
@@ -208,23 +235,26 @@ Three screens (wireframes agreed in brainstorming):
    **Quick Scan** (V1, author's decision): a mode on the same screen that needs no saved system. Pick any one pattern or filter from the registry list. Its default params are shown and editable. Pick a stock list and timeframe, then scan. Results use the same table. An "Open in System Builder" button turns the quick scan into a draft system, so the pattern can be backtested.
 3. **Stock Report:** symbol search → chart with breakout level line → checklist of ✅/❌ per condition with evidence; "insufficient history" shown explicitly. The N-year-high line always says how old the old high is, e.g. "old high 1,240 set 2023-01-12, 1 year 10 months ago", so continuation highs are obvious.
 The **System Builder starts from the default system or an empty rule, never from leftover example conditions** (V0: Chartink's page loaded example filters that silently combined with the user's rule). Results lead with **CAGR and max drawdown side by side, each next to the benchmark's**: in V0 the robust finding was risk (−27% vs −60% drawdown), not return.
-Charts: TradingView Lightweight Charts. Dark theme default.
+Charts: TradingView Lightweight Charts for both the price chart and the equity-vs-Nifty curve, attribution logo on. Dark theme default.
+Front-end shape (§4.1): React 19 SPA built by Vite and embedded in the Go binary. TanStack Router keeps scanner filters, report options and the builder draft in typed URL search params (shareable links). TanStack Query owns all server state; the builder draft is a typed `useReducer`; the server is the only validator (huma 400 field paths shown on the matching block). UI from Tailwind v4 + shadcn/ui + TanStack Table.
 
 ### 7.6 Shared types
-Go structs are the source of truth; TypeScript types are generated (e.g., `tygo`) in the build. CI fails if generated types are stale.
+Go handler input/output structs are the source of truth. huma generates the OpenAPI 3.1 spec; `openapi-typescript` + `openapi-fetch` generate the TS types and typed client. Evidence is a discriminated union on `type`. CI fails if the spec or generated client is stale.
 
 ## 8. Correctness & testing
 
 - **Golden tests** per pattern on small hand-built series with known answers (including edge cases: exactly-equal to the level, insufficient history, gaps).
 - **No-look-ahead property test:** for random t, evaluating signals on data truncated at t must give exactly the same signals up to t as evaluating on the full series.
-- **Fill tests:** gap-down through stop fills at open; trend exit fills next open; edge-triggering doesn't re-enter on consecutive true bars; **an entry on a gap-up open still fills, with quantity computed at the fill price** (V0: TradingView silently skipped DIVISLAB's July 2026 trade at 100% sizing).
+- **Fill tests:** gap-down through stop fills at open; trend exit fills next open; edge-triggering doesn't re-enter on consecutive true bars; no signal after a not-evaluable bar; **an entry on a gap-up open still fills, with whole-share quantity computed at the fill price** (V0: TradingView silently skipped DIVISLAB's July 2026 trade at 100% sizing).
+- **Numbers:** float64 throughout, int64 quantities; comparisons against the oracle use a 1e-9 relative tolerance (`docs/adr/0004`).
+- **End-to-end:** one Playwright test of the interviewer flow (§10) against the demo snapshot, in CI.
 - **Real-data tests from V0** (skipped unless `KANSO_DB` is set): the five verified breakouts in `docs/v0/reference-results.md` (DIVISLAB 2024-09-10 and 2026-07-14, INFY 2024-09-02, TCS 2024-02-06, HEROMOTOCO 2023-11-29), with level, level date and volume ratio. INFY must pass `n_year_high` and fail `volume_surge` (0.73×). NAVINFLUOR 2026-11-18 must fail a 1-year `level_age` filter (old high 3 bars old). **BAJFINANCE 2025-06-16** (1:2 split + 4:1 bonus) must show a 50-day volume ratio near 1×, not 6×, which proves volume is split-adjusted.
 - **Determinism:** same system + same data → byte-identical results.
 - **Resampling tests:** weekly bars across holidays and short weeks.
 - **Real-data smoke test:** a few known NSE multi-year breakouts on dates the author picks and verifies on a chart.
 - **vectorbt benchmark** *(author's decision)*: vectorbt is the independent reference ("oracle") for the Go backtester.
   - **Where it lives:** `tools/vbt-benchmark/`, a dev-only Python tool. It is never shipped, never called by the server, and the Go test suite doesn't need Python installed.
-  - **Same input:** it reads a frozen data fixture exported from Kanso's DuckDB (`testdata/benchmark/bars.csv`, about 10 Nifty 50 stocks plus `^NSEI`, 2007→fixed date), never yfinance, so both engines see identical bars.
+  - **Same input:** it reads a frozen data fixture exported from Kanso's SQLite store as Parquet (`testdata/benchmark/bars.parquet`, exact float64 and dates, about 10 Nifty 50 stocks plus `^NSEI`, 2007→fixed date), never yfinance, so both engines see identical bars.
   - **Golden output:** for each benchmark system (`testdata/benchmark/systems/*.json`: daily defaults, weekly defaults, no-filters, stop-only) it writes `expected_signals.csv` and `expected_trades.csv`, which are committed. A Go test (`TestBenchmarkAgainstVectorbt`) compares Kanso's output with them.
   - **Must match exactly:** signal dates and entry dates per symbol (single-stock mode, no slot limits).
   - **Must match where the semantics agree:** exit dates and exit reasons for trades whose stop wasn't gapped through.
@@ -253,7 +283,6 @@ Go structs are the source of truth; TypeScript types are generated (e.g., `tygo`
 
 ## 11. Left to the builder
 
-- Exact Go libraries (HTTP router, DuckDB driver), project layout details, CSS approach.
-- Hosting provider for the demo, as long as it meets §3 ("no install").
+- Project layout details beyond the plan. (Libraries, CSS approach and hosting were settled in the 2026-11-20 stack review, §4.1.)
 - Visual design details beyond the agreed wireframes.
 - Pagination/virtualization of tables.
