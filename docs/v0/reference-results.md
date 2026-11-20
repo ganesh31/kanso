@@ -50,11 +50,37 @@ Two losses exceed the 8% stop (−13.5% in Sep 2006, −12.5% in Jul 2020). A **
 | | | | |
 
 ## PKScreener / stock-pattern observations
-- Useful scans / columns:
-- Missing ("I wanted to see why…"):
+**stock-pattern** (GPL-3.0, run on eod2 data, Python 3.12 via uv):
+- Loads eod2 data correctly (checked HUDCO directly through its loader).
+- **Detected nothing**: not on DIVISLAB, INFY, TCS, HEROMOTOCO or NAVINFLUOR just before their breakouts (daily or weekly), not on 20 large caps on 2024-04-25, and **not even its own README example** (HUDCO bullish VCP, 25 Apr 2024) on any day of April 2024. Stopped under the V0 time-box.
+- Design notes: it looks for patterns *before* a breakout (the last leg), on the last ~160 bars only, with pivots 6 bars each side, and reports only on the exact day the last leg forms. Detection is very sensitive to dates and parameters, and when it finds nothing it gives no reason.
+- **Lesson for Kanso:** pattern detectors that silently return nothing are hard to trust or debug. Kanso's Stock Report shows "not evaluable (reason)" and the evidence for every ✅/❌. Keep that.
+
+**PKScreener** (Docker image `pkjmesra/pkscreener:latest`, v0.46.20260615):
+- The image is **5.4 GB on disk** (1.3 GB compressed download) and needs Colima/Docker running.
+- It runs unattended via menu codes (`-o X:<index>:<scan>`). Passing `-a Y` auto-answers prompts, which **also accepts its Disclaimer and Terms of Service**.
+- **It now requires a login**: a user ID and one-time password from its Telegram bot (`@nse_pkscreener_bot`). It can't be used without a Telegram account.
+- The market data bundled in the image was dated **2026-07-07**, about 4.5 months stale until it downloads fresh data.
+- **Trial mode exists:** leave the Telegram User ID blank and choose "2 > I am a free/trial user". (Option 1 is a "Premium trial in Limited Mode".) The menus only render in an interactive terminal (`docker run -it`).
+- **Scanner menu (Nifty 500): 49 scans**, mostly short-term indicator signals (RSI, MACD, CCI, Ichimoku, intraday). The ones relevant to Kanso: 17 "52 week high breakout (today)", 2 "Today's Breakouts", 1 "Probable Breakouts", 49 "52-week high approaching breakout", 4 "Lowest Volume in last N-days (Early Breakout Detection)", 3 "Consolidating stocks", 26 "Stocks with stock-split/bonus/dividends".
+- **Scan 17 on Nifty 500 returned 0 results "in 0.1 sec" for 2026-11-20**, labelled "Already Cached", with "Queue Wait Time: 247s". The header still showed Nifty data from 2026-07-07. Zero stocks at a 52-week high across 500 on a normal day is implausible. It looks like trial mode served a cached or stale result instead of scanning fresh data. **Not trustworthy as a reference.**
+- **Ideas for Kanso:** a "**approaching breakout**" watch list (stocks just under their multi-year high, like scan 49) is a natural V2 feature. Showing **when the data is from** on every result screen would have exposed PKScreener's stale data immediately. Kanso's honesty panel already does this (§5.8).
+- **Lesson for Kanso:** a one-command local install with no account is a real advantage for a portfolio demo.
 
 ## Data: Yahoo vs eod2
-- Split/bonus check (symbol, date, which source is right):
+**eod2_data snapshot (2026-11-14):** 3,780 NSE symbols, 570 MB, one CSV per symbol (`Date,Open,High,Low,Close,Volume,Series,TOTAL_TRADES,QTY_PER_TRADE,DLV_QTY`), BAJFINANCE from 2010. Extras Yahoo lacks: number of trades and **delivery quantity** (shares actually taken into demat, not traded intraday).
+
+**Split/bonus check: BAJFINANCE, ex-date 2025-06-16** (a 1:2 split *and* a 4:1 bonus, 10× more shares in total)
+
+| | eod2 | Yahoo |
+|---|---|---|
+| Prices before the ex-date | ✅ adjusted ÷10 (close 2025-06-13 = 933.10) | ✅ identical (933.10) |
+| Volume before the ex-date | ❌ **not adjusted** (1,018,202) | ✅ adjusted ×10 (10,182,020) |
+| Corporate-action record | none in the file | ⚠️ split event says **2:1** only, so the bonus is missing even though prices are adjusted ÷10 |
+
+**Consequence:** with eod2's unadjusted volume, the 50-day volume ratio shows a **fake 6.2× "surge" on the ex-date and 9.4× four days later**, and stays distorted for about 50 trading days. Kanso's volume filter would fire falsely after every split or bonus. Yahoo's volume is correct here.
+
+**Verdict for V1 (proposal):** keep **Yahoo** as the V1 source. If eod2 or bhavcopy is ever used, volume must be re-adjusted from a corporate-actions list. Never trust Yahoo's split *events* to reconstruct adjustments; use its already-adjusted bars (spec §6.1 already says so). Also: Yahoo dropped one request mid-session (RemoteDisconnected) and succeeded on retry, which confirms the retry/backoff requirement.
 
 ## UI likes / dislikes (TradingView, Chartink, PKScreener, Superalgos)
 -
@@ -62,6 +88,8 @@ Two losses exceed the 8% stop (−13.5% in Sep 2006, −12.5% in Jul 2020). A **
 ## Changes to make in the V1 spec
 - **Consider a "minimum age of the old high" filter** (e.g. ≥ 1 year / 252 bars). Without it, most "new 3-year highs" are continuation highs in stocks that are already rising: DIVISLAB triggered 8 times in 6 months. One data point in favour: DIVISLAB's May 2025 re-entry (old high only about 5 months old) was the losing trade. Decide with more data.
 - **Add a test: entry on a gap-up open still fills.** Size the position at the *fill* price (next open), never at the signal close. TradingView gets this wrong at 100% sizing (see above). The Kanso spec already sizes at the fill (§5.6), so this test pins that down.
+- **Keep Yahoo as the V1 data source** (Day 2). eod2/bhavcopy prices are split-adjusted but volume isn't, which causes fake volume surges after splits and bonuses. Add a real-data test: BAJFINANCE's 50-day volume ratio on 2025-06-16 must be about 1×, not 6×.
+- **V2 idea: an "approaching breakout" watch list** of stocks within a few % of their multi-year high (PKScreener scan 49).
 - **Ingest freshness:** Yahoo can lag a day behind the NSE close. The ingest must record the latest date it actually got, and the scanner must report "as of <date>" from the data, never from today's calendar date (Chartink comparison).
 - **Note in the README:** after an exit, re-entry needs the rule to turn false and then true again (edge-triggered). If an exit happens while the price is still above the level, there's no re-entry until a fresh breakout.
 
@@ -70,3 +98,6 @@ Two losses exceed the 8% stop (−13.5% in Sep 2006, −12.5% in Jul 2020). A **
 - Breakout systems win less than half the time, but winners are about 2.5× losers (DIVISLAB: 45% win rate, +15.0% / −5.9%).
 - Exits cost upside: DIVISLAB's Sept 2024 trade exited at +0.8% before the stock doubled. Re-entries (May 2025 −8.5%, Jul 2026 +52.7%) got some of it back: about +41% compounded vs +106% buy-and-hold.
 - Volume matters: INFY's failed Sept 2024 breakout came on 0.73× average volume.
+- (Day 2) Splits and bonuses rescale history. Prices *and* volume must both be adjusted, or indicators built on them lie (BAJFINANCE, June 2025).
+- (Day 2) Any data provider can be wrong or stale: eod2's unadjusted volume, Yahoo's incomplete split record and dropped request, PKScreener's cached July data. Always check the data's date and spot-check against a second source.
+- (Day 2) Pattern detectors that silently return nothing (stock-pattern) can't be trusted. Showing the evidence and the reason "why not" matters as much as showing matches.
