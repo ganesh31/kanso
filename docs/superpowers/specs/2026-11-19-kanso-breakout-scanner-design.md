@@ -36,6 +36,12 @@ Kanso is a web tool for finding and testing **multi-year breakouts** in Indian e
 - Intraday data, live/streaming data, broker integration or order placement.
 - User accounts, multi-user, auth.
 
+**V2 backlog** *(from V0, author's decision 2026-11-20)*
+- **Approaching breakout** watch list: stocks within a few % *below* their multi-year high (like PKScreener's scan 49).
+- **Plain-English rules**: type a rule in words and get editable condition blocks (like Chartink's Magic Filters).
+- **Breakouts-per-day chart**: how many stocks broke out each day, coloured by sector, to show when breakouts cluster.
+- **Delivery quantity**: NSE delivery data (shares taken into demat) as an extra "real buying" signal. Needs a second data source such as eod2/bhavcopy, with its volume re-adjusted for splits (V0 found eod2 volume unadjusted).
+
 **Anti-goals** — failure even if it "works"
 - A backtest that looks good because of **look-ahead bias** or **fantasy fills**.
 - Looking like a rebrand of RZone (names, layout copied wholesale, "clone" framing).
@@ -87,8 +93,11 @@ A system runs on either **daily** bars or **weekly** bars (built from daily: ope
 | Volume surge | k = 2.0, window = 50 daily / 10 weekly | volume(t) ≥ k × mean(volume over prior `window` bars, excluding t) | ratio |
 | Relative strength | 6 months (126 daily / 26 weekly), benchmark Nifty 50 | return(stock, t−n→t) − return(benchmark, t−n→t) > 0 | both returns, difference |
 | Not extended | x = 8% | close(t) ≤ level(t) × (1 + x) | % above level |
+| Old high age *(V0 finding; optional, not in the default system)* | min = 252 daily / 52 weekly bars (1 year) | bars since the level was set (t − level index) ≥ min | bars since, level date |
 
 (Weekly close confirmation is the timeframe switch in §5.1.)
+
+**Why the old-high-age filter is optional** (V0 Day 3, Nifty 50, 2007–2026): with min = 1 year, trades were the best quality of any variation (+17.3% expectancy vs +11.1%, 45% win rate), but there were only 38 in 19 years, so a portfolio built on it sat mostly in cash (3.2% CAGR). Without it, most "new 3-year highs" are **continuation highs** in stocks that are already rising: the old high is days old, not years. So the level's age is **always shown as evidence** (Scanner column, Stock Report line), and the filter is there for users who want only base breakouts. V0 experiments also showed the volume, RS and not-extended filters changed results by under 1%/yr. **The defaults stay as specified**, so we don't overfit to one survivorship-biased sample.
 
 ### 5.4 Exits
 - **Stop-loss:** x% below entry fill price (default 8%). Checked on every daily bar after entry. If low(d) ≤ stop: exit at **min(open(d), stop)** (a gap below the stop fills at the open, not the stop).
@@ -137,6 +146,7 @@ Portfolio: CAGR, max drawdown, final equity, exposure (% of time invested), vs. 
 ### 6.4 Ingest
 - `cmd/ingest` — full backfill (from 2005-01-01) and incremental daily update; idempotent; records per-symbol status in `ingest_log`.
 - Personal use: run nightly via cron/launchd after market close.
+- **Freshness** *(V0 finding)*: Yahoo can lag a day behind the NSE close (V0 saw Chartink with 2026-11-18 while Yahoo still ended at 2026-11-17). Ingest records each instrument's **latest bar date** and prints a summary: "data as of <benchmark's latest date>; N instruments behind". Every result screen shows **"as of <date>" taken from the data**, never from today's calendar. An instrument whose last bar is older than the benchmark's is reported as stale (scanner already excludes these).
 - Demo: a frozen DuckDB snapshot shipped with the deploy, server runs read-only.
 - **Demo data scope** *(author's decision)*: the snapshot contains **only Nifty 50 constituents plus the `^NSEI` benchmark**, sourced from Yahoo. There is no bulk-download or raw-export endpoint in demo mode: `/api/bars` serves only the window needed for one chart, and responses are rate-limited. The UI footer and README credit the source and state that it's a non-commercial portfolio demo. Redistribution risk is accepted as low but nonzero, and the `Source` interface keeps the data swappable. Personal (non-demo) installs ingest the full Nifty 500.
 - **Demo writes** *(design call)*: the server is stateless in demo mode. `POST/PUT/DELETE /api/systems` return 403. Visitors' saved systems and variation counts live in the browser's localStorage. Backtest, scan and report calls are computations only, so no visitor data is ever stored server-side. A per-IP rate limit on backtests prevents abuse.
@@ -193,9 +203,10 @@ Validation rejects unknown types, out-of-range params, and an `any` group with f
 ### 7.5 Web app
 Three screens (wireframes agreed in brainstorming):
 1. **System Builder:** stock list picker; required conditions as plain-English blocks with editable numbers and on/off toggles; one "Match ANY of these" group; exit block; Backtest and Scan buttons; results panel with metrics, equity vs. Nifty curve, honesty panel, trade list; click a trade → chart with entry/exit markers and the breakout level line.
-2. **Scanner:** pick a saved system. *(design call)* The default view is **fresh signals**: stocks whose entry rule turned false→true within the last N bars (default 5 daily / 1 weekly), matching what the backtest would have entered. A toggle shows **all currently qualifying** stocks, including ones that have been true for a while, with a "true since" date. Result is a table of matches (symbol, level, level date, % above, volume ratio, RS), sortable; click → Stock Report.
+2. **Scanner:** pick a saved system. *(design call)* The default view is **fresh signals**: stocks whose entry rule turned false→true within the last N bars (default 5 daily / 1 weekly), matching what the backtest would have entered. A toggle shows **all currently qualifying** stocks, including ones that have been true for a while, with a "true since" date. Result is a table of matches (symbol, level, level date, **old high age**, % above, volume ratio, RS), sortable, with "as of <date>" in the header; click → Stock Report.
    **Quick Scan** (V1, author's decision): a mode on the same screen that needs no saved system. Pick any one pattern or filter from the registry list. Its default params are shown and editable. Pick a stock list and timeframe, then scan. Results use the same table. An "Open in System Builder" button turns the quick scan into a draft system, so the pattern can be backtested.
-3. **Stock Report:** symbol search → chart with breakout level line → checklist of ✅/❌ per condition with evidence; "insufficient history" shown explicitly.
+3. **Stock Report:** symbol search → chart with breakout level line → checklist of ✅/❌ per condition with evidence; "insufficient history" shown explicitly. The N-year-high line always says how old the old high is, e.g. "old high 1,240 set 2023-01-12, 1 year 10 months ago", so continuation highs are obvious.
+The **System Builder starts from the default system or an empty rule, never from leftover example conditions** (V0: Chartink's page loaded example filters that silently combined with the user's rule). Results lead with **CAGR and max drawdown side by side, each next to the benchmark's**: in V0 the robust finding was risk (−27% vs −60% drawdown), not return.
 Charts: TradingView Lightweight Charts. Dark theme default.
 
 ### 7.6 Shared types
@@ -205,7 +216,8 @@ Go structs are the source of truth; TypeScript types are generated (e.g., `tygo`
 
 - **Golden tests** per pattern on small hand-built series with known answers (including edge cases: exactly-equal to the level, insufficient history, gaps).
 - **No-look-ahead property test:** for random t, evaluating signals on data truncated at t must give exactly the same signals up to t as evaluating on the full series.
-- **Fill tests:** gap-down through stop fills at open; trend exit fills next open; edge-triggering doesn't re-enter on consecutive true bars.
+- **Fill tests:** gap-down through stop fills at open; trend exit fills next open; edge-triggering doesn't re-enter on consecutive true bars; **an entry on a gap-up open still fills, with quantity computed at the fill price** (V0: TradingView silently skipped DIVISLAB's July 2026 trade at 100% sizing).
+- **Real-data tests from V0** (skipped unless `KANSO_DB` is set): the five verified breakouts in `docs/v0/reference-results.md` (DIVISLAB 2024-09-10 and 2026-07-14, INFY 2024-09-02, TCS 2024-02-06, HEROMOTOCO 2023-11-29), with level, level date and volume ratio. INFY must pass `n_year_high` and fail `volume_surge` (0.73×). NAVINFLUOR 2026-11-18 must fail a 1-year `level_age` filter (old high 3 bars old). **BAJFINANCE 2025-06-16** (1:2 split + 4:1 bonus) must show a 50-day volume ratio near 1×, not 6×, which proves volume is split-adjusted.
 - **Determinism:** same system + same data → byte-identical results.
 - **Resampling tests:** weekly bars across holidays and short weeks.
 - **Real-data smoke test:** a few known NSE multi-year breakouts on dates the author picks and verifies on a chart.
@@ -218,6 +230,11 @@ Go structs are the source of truth; TypeScript types are generated (e.g., `tygo`
   - **Allowed, listed differences:** the gap-through-stop fill (Kanso fills at the open per §5.4, vectorbt at the stop price) and portfolio slot ranking. Each such trade is listed in the test output with its reason. Any other mismatch fails the test.
   - **The spec wins:** vectorbt is a cross-check, not ground truth. When the two disagree on something §5 defines, Kanso follows §5 and the difference is added to the allowed list with an explanation.
   - **Regenerating:** `make benchmark` regenerates the golden files. Changes to them show up in review like any other diff.
+  - **Setup traps found in V0** *(author's decision)*:
+    - The tool **must pass `open`, `high` and `low` to `from_signals`**. Without them vectorbt checks stops against the close only. DIVISLAB 2020-07-02 opened at ₹2,100, below its ₹2,196 stop, and closed 20 paise above it: a −12.4% stop-out became a +41.9% winner.
+    - `from_signals` has **no max-positions limit**, which is why the benchmark compares single-stock mode only.
+    - The fixture must include **DIVISLAB and BAJFINANCE**. That covers the V0 trades and a split plus bonus.
+    - **Settle DIVISLAB's Aug 2025 stop date**, where V0's hand calculation (2025-08-06), TradingView (08-07) and vectorbt (08-08) disagree. §5.4 decides, and the reason goes in the test's allowed-differences comments.
 
 ## 9. Extensibility seams (built now, used later)
 

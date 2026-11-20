@@ -1,5 +1,14 @@
 # V0 reference results
 
+**V0 finished on 2026-11-20.** Decisions applied to the V1 spec and plan:
+- an optional old-high-age filter, with the level's age always shown
+- real-data tests: 5 verified breakouts, NAVINFLUOR as a negative case, BAJFINANCE split volume, and gap-up fills
+- a data-freshness "as of" date on every result
+- vectorbt benchmark fixes: pass open/high/low, and settle the DIVISLAB Aug 2025 stop date
+- a V2 backlog: approaching-breakout watch list, plain-English rules, breakouts-per-day chart, delivery quantity
+
+The V1 defaults are unchanged.
+
 Fixed test date: `YYYY-MM-DD`
 
 ## Chartink Quick Scan (3-year high + volume)
@@ -93,9 +102,19 @@ Today's Nifty 50 + DIVISLAB, 2007-09-17 → 2026-11-20. Nifty 50 buy & hold: CAG
 - **The robust result is risk:** every reasonable variation kept max drawdown at about −25% to −30% vs −60% for the index. That comes from the exits and cash, not from any filter.
 
 ## Breakouts verified by eye (become V1 real-data tests)
-| Symbol | Breakout date | Old high & its date | Screenshot |
-|---|---|---|---|
-| | | | |
+3-year high, daily, Yahoo split-adjusted data. Each was found by the V0 scans and checked on a TradingView chart or in the trade lists.
+
+| Symbol | Breakout date | Old high & its date | Volume × | Outcome under Kanso rules | Checked how |
+|---|---|---|---|---|---|
+| DIVISLAB | 2024-09-10 | 5,425.1 (2021-10-18) | 2.89× | +0.8% (trend exit) | Monthly chart (Lesson 1), TradingView and vectorbt entry 2024-09-11 |
+| DIVISLAB | 2026-07-14 | 7,071.5 (2025-07-08) | 3.0× | +52.7%, open | TradingView run 2 and vectorbt entry 2026-07-15 |
+| INFY | 2024-09-02 | 1,953.9 (2022-01-17) | 0.73× | −8.5% (stop), failed breakout | Weekly chart (Lesson 2), trade walk |
+| TCS | 2024-02-06 | 4,043.0 (2022-01-17) | 1.98× | −8.5% (stop) | Trade walk |
+| HEROMOTOCO | 2023-11-29 | 3,629.1 (2021-02-18) | 2.66× | +36.4% (trend exit) | Trade walk |
+
+Plus one negative case (must **not** count as a base breakout when a minimum-age filter is on): **NAVINFLUOR 2026-11-18**, a close above a 3-year high set on 2026-11-13, only 3 bars earlier.
+
+INFY's volume (0.73×) fails the volume filter, so with all filters on INFY is **not** a signal. The test should assert `n_year_high` passes and `volume_surge` fails.
 
 ## PKScreener / stock-pattern observations
 **stock-pattern** (GPL-3.0, run on eod2 data, Python 3.12 via uv):
