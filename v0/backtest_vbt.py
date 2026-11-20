@@ -22,7 +22,7 @@ STOP, SMA_WEEKS, COST, SLOTS = 0.08, 30, 0.003, 10
 
 symbols = [s.strip() + ".NS" for s in pd.read_csv(sys.argv[1])["Symbol"]]
 raw = yf.download(symbols + ["^NSEI"], start="2005-01-01", auto_adjust=False, actions=False, progress=False)
-o, h, c, v = (raw[f][symbols] for f in ("Open", "High", "Close", "Volume"))
+o, h, lo, c, v = (raw[f][symbols] for f in ("Open", "High", "Low", "Close", "Volume"))
 bench = raw["Close"]["^NSEI"]
 
 level = h.rolling(L, min_periods=L).max().shift(1)
@@ -37,8 +37,11 @@ w_exit = (wc < wc.rolling(SMA_WEEKS).mean()).reindex(c.index, method="ffill").sh
 exits = w_exit.astype(bool)
 
 pf = vbt.Portfolio.from_signals(
-    close=c, entries=entries, exits=exits, price=o, sl_stop=STOP,
-    fees=COST, size=1.0 / SLOTS, size_type="targetpercent",
+    # open/high/low are required for intraday stop checks (see backtest_slots.py). This script does NOT enforce
+    # the 10-slot limit (up to 31 positions were open at once); use backtest_slots.py for Kanso-style results.
+    close=c, open=o, high=h, low=lo, entries=entries, exits=exits, price=o, sl_stop=STOP,
+    # from_signals can't size by % of equity; use a fixed slice of the starting capital (Kanso: equity / slots).
+    fees=COST, size=1_000_000 / SLOTS, size_type="value",
     init_cash=1_000_000, cash_sharing=True, group_by=True, freq="1D",
 )
 
