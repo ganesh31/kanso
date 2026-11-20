@@ -70,18 +70,18 @@ Kanso is a web tool for finding and testing **multi-year breakouts** in Indian e
 ### 4.1 Tech stack *(stack review, 2026-11-20)*
 | Layer | Choice | ADR |
 |---|---|---|
-| Engine + API | Go 1.25, std `net/http` + **huma v2** (OpenAPI 3.1, `/docs`), `log/slog` JSON logs | 0001, 0003 |
+| Engine + API | Go 1.27, std `net/http` + **huma v2** (OpenAPI 3.1, `/docs`), `log/slog` JSON logs | 0001, 0003 |
 | Storage | **SQLite (WAL)** via pure-Go `modernc.org/sqlite`; **sqlc** queries, **goose** embedded migrations. No cgo. | 0002 |
 | Export | Parquet via `parquet-go`, output only (oracle fixture, exports) | 0002 |
 | Ingest | separate `cmd/ingest` process; launchd 18:30 IST + 08:00 retry | — |
-| Contract | OpenAPI → `openapi-typescript` + `openapi-fetch`; Evidence is a discriminated union | 0003 |
+| Contract | OpenAPI → `orval` (typed fetch functions + TanStack Query hooks); Evidence is a discriminated union | 0003 |
 | Web | React 19, Vite, **TanStack Router** (typed URL state), **TanStack Query**, `useReducer` builder draft | — |
 | UI | Tailwind v4, shadcn/ui, TanStack Table; dark default | — |
 | Charts | TradingView Lightweight Charts for price **and** equity (attribution logo kept on) | — |
 | Numbers | float64 prices/money, int64 quantities | 0004 |
 | Hosting | Google Cloud Run, DB baked into image, max 1 instance | — |
 | CI/CD | GitHub Actions (race tests, lint, API staleness, vitest, Playwright interviewer flow), deploy on main via Workload Identity Federation; CodeRabbit PR review | — |
-| Tooling | Node 22 + pnpm, go-cmp, Makefile, gofumpt, golangci-lint, eslint + prettier | — |
+| Tooling | Node 26 + pnpm, TypeScript 7, go-cmp, Makefile, gofumpt, golangci-lint, eslint + prettier | — |
 | Repo | Public, MIT | — |
 
 ## 5. Domain definitions (precise)
@@ -239,7 +239,7 @@ Charts: TradingView Lightweight Charts for both the price chart and the equity-v
 Front-end shape (§4.1): React 19 SPA built by Vite and embedded in the Go binary. TanStack Router keeps scanner filters, report options and the builder draft in typed URL search params (shareable links). TanStack Query owns all server state; the builder draft is a typed `useReducer`; the server is the only validator (huma 400 field paths shown on the matching block). UI from Tailwind v4 + shadcn/ui + TanStack Table.
 
 ### 7.6 Shared types
-Go handler input/output structs are the source of truth. huma generates the OpenAPI 3.1 spec; `openapi-typescript` + `openapi-fetch` generate the TS types and typed client. Evidence is a discriminated union on `type`. CI fails if the spec or generated client is stale.
+Go handler input/output structs are the source of truth. huma generates the OpenAPI 3.1 spec; `orval` generates the TS types, typed fetch functions and TanStack Query hooks, all routed through one hand-written fetcher that throws `ApiError`. Evidence is a discriminated union on `type`. CI fails if the spec or generated client is stale.
 
 ## 8. Correctness & testing
 

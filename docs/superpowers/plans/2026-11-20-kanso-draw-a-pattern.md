@@ -6,7 +6,7 @@
 
 **Architecture:** A new pure-Go package `internal/shape` holds the resample → z-normalise → Pearson math and a `Match` function over `market.Provider`. A new endpoint, `POST /api/shape-match`, exposes it as a huma operation, and its TS types come from the regenerated OpenAPI spec (V1's `make api`). The React screen `/draw` has a canvas sketcher and result cards that overlay each stock's normalised line on the sketch.
 
-**Tech Stack:** The same as V1 (spec §4.1): Go (huma on std `net/http`, `errgroup`), OpenAPI → `openapi-typescript`, React 19 + TS, TanStack Router/Query, Vitest + React Testing Library. Mini charts are plain SVG *(plan call: no Lightweight Charts instance per card)*.
+**Tech Stack:** The same as V1 (spec §4.1): Go (huma on std `net/http`, `errgroup`), OpenAPI → `orval`, React 19 + TS, TanStack Router/Query, Vitest + React Testing Library. Mini charts are plain SVG *(plan call: no Lightweight Charts instance per card)*.
 
 **Spec:** `docs/superpowers/specs/2026-11-20-kanso-draw-a-pattern-design.md` (an add-on to `2026-11-19-kanso-breakout-scanner-design.md`).
 
@@ -137,7 +137,7 @@ func TestMatchUnknownUniverse(t *testing.T)             // errors.Is(err, market
 ### Task 3: API endpoint and generated types
 
 **Files:**
-- Modify: `internal/api/server.go` (route), `internal/api/handlers.go` (handler), `internal/api/demo.go` (add to rate-limited set), `api/openapi.json` + `web/src/api/schema.d.ts` (regenerate with `make api`)
+- Modify: `internal/api/server.go` (route), `internal/api/handlers.go` (handler), `internal/api/demo.go` (add to rate-limited set), `api/openapi.json` + `web/src/api/generated.ts` (regenerate with `make api`)
 - Test: `internal/api/api_test.go`
 
 **Interfaces:**
@@ -155,7 +155,7 @@ func TestShapeMatchDemoRateLimited(t *testing.T)      // Demo, RatePerMin 2 → 
 
 - [ ] **Step 2: Run** `go test ./internal/api/...`. Expected: FAIL (404 on route).
 - [ ] **Step 3: Implement** the route and handler. Decode with `DisallowUnknownFields`. A non-number in `points` is a 400 on `points`.
-- [ ] **Step 4: Run** `go test ./internal/api/... && make check-api`. The first check-api run will show a diff. Run `make api`, commit the regenerated `api/openapi.json` and `web/src/api/schema.d.ts`, then rerun. Expected: PASS.
+- [ ] **Step 4: Run** `go test ./internal/api/... && make check-api`. The first check-api run will show a diff. Run `make api`, commit the regenerated `api/openapi.json` and `web/src/api/generated.ts`, then rerun. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(api): POST /api/shape-match`
 
 ### Task 4: Draw a Pattern screen

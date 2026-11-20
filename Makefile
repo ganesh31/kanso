@@ -14,14 +14,14 @@ lint:
 	golangci-lint run
 	test -z "$$(gofumpt -l .)"
 
-# Regenerate the OpenAPI spec from the Go handlers and the TypeScript schema from it.
+# Regenerate the OpenAPI spec from the Go handlers and the TypeScript client (orval) from it.
 api:
 	go run ./cmd/server -dump-openapi > api/openapi.json
 	pnpm --dir web run gen:api
 
-# Fails if the committed spec or TS schema is stale.
+# Fails if the committed spec or generated TS client is stale.
 check-api: api
-	git diff --exit-code api/openapi.json web/src/api/schema.d.ts
+	git diff --exit-code api/openapi.json web/src/api/generated.ts
 
 web:
 	cd web && pnpm install --frozen-lockfile && pnpm build

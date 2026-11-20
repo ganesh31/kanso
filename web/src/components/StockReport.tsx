@@ -1,12 +1,12 @@
-import { useBars, useReport } from "@/api/queries";
+import { useGetBars, useStockReport } from "@/api/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPrice } from "@/lib/format";
 import { EvidenceList } from "./EvidenceList";
 import { PriceChart } from "./PriceChart";
 
 export function StockReport({ symbol, asOf }: { symbol: string; asOf?: string }) {
-  const report = useReport(symbol, asOf ? { as_of: asOf } : {});
-  const bars = useBars(symbol);
+  const report = useStockReport(symbol, asOf ? { as_of: asOf } : {});
+  const bars = useGetBars(symbol, undefined, { query: { select: (body) => body.bars } });
 
   if (report.isPending) {
     return <p className="text-muted-foreground">Loading {symbol}…</p>;

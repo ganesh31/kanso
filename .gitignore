@@ -30,3 +30,7 @@ web/playwright-report/
 *.db-wal
 *.db-shm
 /bin/
+
+# Local tool output
+.playwright-mcp/
+.claude/worktrees/

@@ -1,19 +1,23 @@
-import { describe, expect, test } from "vitest";
-import { ApiError, createApi } from "./client";
+import { afterEach, describe, expect, test } from "vitest";
+import { ApiError, configureApi, getBars, stockReport } from "./client";
 
 function respond(status: number, body: unknown) {
-  return async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": status >= 400 ? "application/problem+json" : "application/json" },
-    });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": status >= 400 ? "application/problem+json" : "application/json" },
+  });
 }
+
+function serve(handler: (req: Request) => Response) {
+  configureApi({ baseUrl: "http://test", fetch: async (input) => handler(input as Request) });
+}
+
+afterEach(() => configureApi({}));
 
 describe("api client", () => {
   test("client maps 400 body to ApiError with fields", async () => {
-    const api = createApi({
-      baseUrl: "http://test",
-      fetch: respond(400, {
+    serve(() =>
+      respond(400, {
         title: "Bad Request",
         status: 400,
         detail: "validation failed",
@@ -22,8 +26,8 @@ describe("api client", () => {
           { message: "need two conditions", location: "body.entry.any" },
         ],
       }),
-    });
-    const err = await api.report("TCS", { as_of: "2024-13-45" }).catch((e: unknown) => e);
+    );
+    const err = await stockReport("TCS", { as_of: "2024-13-45" }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     const apiErr = err as ApiError;
     expect(apiErr.status).toBe(400);
@@ -35,11 +39,8 @@ describe("api client", () => {
   });
 
   test("404 becomes ApiError without fields", async () => {
-    const api = createApi({
-      baseUrl: "http://test",
-      fetch: respond(404, { title: "Not Found", status: 404, detail: "unknown symbol NOPE" }),
-    });
-    await expect(api.report("NOPE")).rejects.toMatchObject({
+    serve(() => respond(404, { title: "Not Found", status: 404, detail: "unknown symbol NOPE" }));
+    await expect(stockReport("NOPE")).rejects.toMatchObject({
       status: 404,
       message: "unknown symbol NOPE",
       fields: [],
@@ -48,14 +49,11 @@ describe("api client", () => {
 
   test("report posts the options and returns the body", async () => {
     let seen: Request | undefined;
-    const api = createApi({
-      baseUrl: "http://test",
-      fetch: async (req: Request) => {
-        seen = req;
-        return respond(200, { symbol: "TCS", as_of: "2024-01-05", timeframe: "daily", lines: [] })();
-      },
+    serve((req) => {
+      seen = req;
+      return respond(200, { symbol: "TCS", as_of: "2024-01-05", timeframe: "daily", lines: [] });
     });
-    const rep = await api.report("TCS", { as_of: "2024-01-05" });
+    const rep = await stockReport("TCS", { as_of: "2024-01-05" });
     expect(rep.symbol).toBe("TCS");
     expect(seen?.method).toBe("POST");
     expect(seen?.url).toBe("http://test/api/report/TCS");
@@ -64,14 +62,11 @@ describe("api client", () => {
 
   test("symbols are URL-encoded", async () => {
     let url = "";
-    const api = createApi({
-      baseUrl: "http://test",
-      fetch: async (req: Request) => {
-        url = req.url;
-        return respond(200, { symbol: "^NSEI", bars: [] })();
-      },
+    serve((req) => {
+      url = req.url;
+      return respond(200, { symbol: "^NSEI", bars: [] });
     });
-    await api.bars("^NSEI");
+    await getBars("^NSEI");
     expect(url).toBe("http://test/api/bars/%5ENSEI");
   });
 });
