@@ -43,6 +43,13 @@ export function Layout({ children }: { children: ReactNode }) {
           >
             Scanner
           </Link>
+          <Link
+            to="/builder"
+            className="text-muted-foreground hover:text-foreground text-sm"
+            activeProps={{ className: "text-foreground" }}
+          >
+            Builder
+          </Link>
         </nav>
         <SymbolSearch />
       </header>
