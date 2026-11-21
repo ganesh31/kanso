@@ -104,6 +104,23 @@ func TestReportWithoutBenchmarkStillEvaluatesOthers(t *testing.T) {
 	}
 }
 
+func TestReportWeeklyEvaluatesLastCompleteWeek(t *testing.T) {
+	// BREAK's last bar, Thu 2022-03-10 (bar 799), is in a forming week; the
+	// last complete week ends Sun 2022-03-06 (bar 795). Its 800 calendar
+	// days are ~114 weeks, short of the 156 weeks 3 years needs.
+	r, err := Run(context.Background(), provider(), "BREAK", "", market.Weekly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Timeframe != market.Weekly || r.AsOf != date(795) {
+		t.Fatalf("header = %s %s, want weekly as of %s", r.Timeframe, r.AsOf, date(795))
+	}
+	res := r.Lines[0].Result
+	if ne, ok := res.Evidence.(patterns.NotEvaluable); !ok || ne.Reason != patterns.ReasonInsufficientHistory {
+		t.Fatalf("result = %+v, want insufficient_history", res)
+	}
+}
+
 func TestReportAsOfUsesLastBarOnOrBefore(t *testing.T) {
 	// As of bar 500 the breakout on the last bar hasn't happened yet.
 	r, err := Run(context.Background(), provider(), "BREAK", date(500), market.Daily)

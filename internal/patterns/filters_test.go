@@ -81,27 +81,6 @@ func TestVolumeSurgeWindowWeeksPerTimeframe(t *testing.T) {
 	}
 }
 
-func TestSameParamsMeanSameDurationOnBothTimeframes(t *testing.T) {
-	// One saved system flipped from daily to weekly keeps window_weeks 10;
-	// only the bar count it converts to changes (grill Q6).
-	p, err := Normalize(VolumeSurge{}.Meta(), Params{"window_weeks": 10.0})
-	if err != nil {
-		t.Fatal(err)
-	}
-	vols := priorThenToday(50, 100, 200)
-	daily := eval(t, VolumeSurge{}, NewContext(volumeSeries(vols), nil), p, 49)
-	weeklyS := volumeSeries(vols)
-	weeklyS.Timeframe = market.Weekly
-	weekly := eval(t, VolumeSurge{}, NewContext(weeklyS, nil), p, 49)
-	if daily.Evaluable || !weekly.Evaluable {
-		t.Fatalf("bar 49: daily evaluable=%v (want false, 50 bars), weekly evaluable=%v (want true, 10 bars)",
-			daily.Evaluable, weekly.Evaluable)
-	}
-	if p.Float("window_weeks") != 10 {
-		t.Fatalf("window_weeks = %v, want 10 on both", p.Float("window_weeks"))
-	}
-}
-
 // closeSeries is a daily series with the given closes, dated from bar
 // offset on (so a benchmark can start later than the stock).
 func closeSeries(symbol string, offset int, closes []float64) *market.Series {

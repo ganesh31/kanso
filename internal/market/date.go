@@ -25,3 +25,8 @@ func (d Date) Valid() bool {
 	t, err := time.Parse(DateLayout, string(d))
 	return err == nil && t.Format(DateLayout) == string(d)
 }
+
+// ISOWeek returns the ISO 8601 year and week of the date.
+func (d Date) ISOWeek() (year, week int) {
+	return d.Time().ISOWeek()
+}
