@@ -29,7 +29,7 @@ func server(t *testing.T) *httptest.Server {
 	bars[799].Close, bars[799].High = 131, 132
 	prov := market.NewMemProvider(
 		[]market.Instrument{{ID: 1, Exchange: "NSE", Symbol: "BREAK", Type: market.Equity, LotSize: 1}},
-		map[string][]market.Bar{"BREAK": bars}, nil)
+		map[string][]market.Bar{"BREAK": bars}, map[string][]string{"NIFTY50": {"BREAK"}})
 	static := fstest.MapFS{
 		"index.html":    {Data: []byte("<!doctype html><title>Kanso</title>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},

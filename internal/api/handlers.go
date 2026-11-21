@@ -37,6 +37,7 @@ func register(api huma.API, h *handlers) {
 		Summary:     "Daily bars for one chart",
 		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, h.bars)
+	registerScan(api, h)
 }
 
 // PatternsOutput lists the pattern registry.
