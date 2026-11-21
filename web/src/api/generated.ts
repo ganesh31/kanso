@@ -26,6 +26,134 @@ import type {
 
 import { apiFetch } from './fetcher.ts';
 import type { ErrorType } from './fetcher.ts';
+export type SkippedInstrumentReason = typeof SkippedInstrumentReason[keyof typeof SkippedInstrumentReason];
+
+
+export const SkippedInstrumentReason = {
+  no_data: 'no_data',
+} as const;
+
+export interface SkippedInstrument {
+  reason: SkippedInstrumentReason;
+  symbol: string;
+}
+
+export interface Honesty {
+  adjustment: string;
+  data_end: string;
+  data_source: string;
+  /** First date used: the later of the requested start and the benchmark's first date */
+  data_start: string;
+  fill_model: string;
+  per_side_pct: number;
+  skipped: SkippedInstrument[];
+  slippage_pct: number;
+  /** True when the stock list is today's members only */
+  survivorship: boolean;
+}
+
+export interface Costs {
+  /** Brokerage and statutory charges, % per side */
+  per_side_pct: number;
+  /** Slippage, % per side */
+  slippage_pct: number;
+}
+
+export type ConditionParams = {[key: string]: unknown};
+
+export interface Condition {
+  params?: ConditionParams;
+  type: string;
+}
+
+export interface Entry {
+  all: Condition[];
+  any?: Condition[];
+}
+
+export interface Exits {
+  /** Stop-loss, % below the entry fill */
+  stop_pct: number;
+  /** Exit when a weekly close is below this SMA of weekly closes; 0 disables */
+  trend_sma_weeks: number;
+}
+
+export interface Portfolio {
+  /** Starting capital in rupees */
+  capital: number;
+  /** Maximum concurrent positions */
+  max_positions: number;
+}
+
+export type SystemTimeframe = typeof SystemTimeframe[keyof typeof SystemTimeframe];
+
+
+export const SystemTimeframe = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+export interface System {
+  costs?: Costs;
+  entry: Entry;
+  exits?: Exits;
+  id?: string;
+  name: string;
+  portfolio?: Portfolio;
+  timeframe?: SystemTimeframe;
+  universe: string;
+}
+
+export interface TradeStats {
+  avg_loss_pct: number;
+  avg_win_pct: number;
+  /** Mean return per trade, in percent */
+  expectancy_pct: number;
+  /** In trading days */
+  median_holding_days: number;
+  trades: number;
+  /** Fraction of trades with a positive return, 0–1 */
+  win_rate: number;
+}
+
+export type TradeExitReason = typeof TradeExitReason[keyof typeof TradeExitReason];
+
+
+export const TradeExitReason = {
+  stop: 'stop',
+  trend: 'trend',
+  open: 'open',
+} as const;
+
+export interface Trade {
+  /** Next trading day after the signal; filled at its open */
+  entry_date: string;
+  /** Fill after slippage, before costs */
+  entry_price: number;
+  exit_date: string;
+  /** Fill after slippage, before costs; the last close for an open trade */
+  exit_price: number;
+  exit_reason: TradeExitReason;
+  /** The day opened below the stop, so it filled at the open */
+  gapped_stop: boolean;
+  /** Trading days from entry to exit */
+  holding_days: number;
+  /** Per-share return in percent, net of costs and slippage */
+  return_pct: number;
+  /** Signal bar (weekly: the signal week's last trading day) */
+  signal_date: string;
+  symbol: string;
+}
+
+export interface BacktestResult {
+  honesty: Honesty;
+  /** The system run, with defaults filled in */
+  system: System;
+  trade_stats: TradeStats;
+  /** Single-stock trades (no slot limits), by symbol then entry date */
+  trades: Trade[];
+}
+
 export interface Bar {
   close: number;
   date: string;
@@ -47,13 +175,6 @@ export const CondOutcomeGroup = {
   all: 'all',
   any: 'any',
 } as const;
-
-export type ConditionParams = {[key: string]: unknown};
-
-export interface Condition {
-  params?: ConditionParams;
-  type: string;
-}
 
 export type NYearHighEvidenceType = typeof NYearHighEvidenceType[keyof typeof NYearHighEvidenceType];
 
@@ -166,16 +287,8 @@ export interface CondOutcome {
   result: Result;
 }
 
-export interface Costs {
-  /** Brokerage and statutory charges, % per side */
-  per_side_pct: number;
-  /** Slippage, % per side */
-  slippage_pct: number;
-}
-
-export interface Entry {
-  all: Condition[];
-  any?: Condition[];
+export interface DefaultSystemOutputBody {
+  system: System;
 }
 
 export interface ErrorDetail {
@@ -200,13 +313,6 @@ export interface ErrorModel {
   title?: string;
   /** A URI reference to human-readable documentation for the error. */
   type?: string;
-}
-
-export interface Exits {
-  /** Stop-loss, % below the entry fill */
-  stop_pct: number;
-  /** Exit when a weekly close is below this SMA of weekly closes; 0 disables */
-  trend_sma_weeks: number;
 }
 
 export interface Outcome {
@@ -281,13 +387,6 @@ export interface Meta {
 
 export interface PatternsOutputBody {
   patterns: Meta[];
-}
-
-export interface Portfolio {
-  /** Starting capital in rupees */
-  capital: number;
-  /** Maximum concurrent positions */
-  max_positions: number;
 }
 
 /**
@@ -386,25 +485,6 @@ export interface ScanResult {
   stale: string[];
 }
 
-export type SystemTimeframe = typeof SystemTimeframe[keyof typeof SystemTimeframe];
-
-
-export const SystemTimeframe = {
-  daily: 'daily',
-  weekly: 'weekly',
-} as const;
-
-export interface System {
-  costs?: Costs;
-  entry: Entry;
-  exits?: Exits;
-  id?: string;
-  name: string;
-  portfolio?: Portfolio;
-  timeframe?: SystemTimeframe;
-  universe: string;
-}
-
 export interface Universe {
   /** False when only today's members are known (survivorship bias) */
   has_history: boolean;
@@ -465,6 +545,78 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getBacktestUrl = () => {
+
+
+
+
+  return `/api/backtest`
+}
+
+/**
+ * @summary Backtest a system over its stock list
+ */
+export const backtest = async (system: System, options?: Parameters<typeof apiFetch>[1]): Promise<BacktestResult> => {
+
+  return apiFetch<BacktestResult>(getBacktestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(system)
+  }
+);}
+
+
+
+
+
+export const getBacktestMutationKey = () => ['backtest'] as const;
+
+export const getBacktestMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backtest>>, TError,BacktestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof backtest>>, TError,BacktestMutationVariables, TContext> => {
+
+const mutationKey = getBacktestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof backtest>>, BacktestMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  backtest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BacktestMutationResult = NonNullable<Awaited<ReturnType<typeof backtest>>>
+    export type BacktestMutationBody = System
+    export type BacktestMutationError = ErrorType<ErrorModel>
+    export type BacktestMutationVariables = {data: System}
+
+    /** @summary Backtest a system over its stock list */
+export const useBacktest = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backtest>>, TError,BacktestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof backtest>>,
+        TError,
+        BacktestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBacktestMutationOptions(options), queryClient);
+    }
 
 export const getGetBarsUrl = (symbol: string,
     params?: GetBarsParams,) => {
@@ -570,6 +722,107 @@ export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError =
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetBarsQueryOptions(symbol,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDefaultSystemUrl = () => {
+
+
+
+
+  return `/api/default-system`
+}
+
+/**
+ * @summary The system the Builder opens on
+ */
+export const getDefaultSystem = async ( options?: Parameters<typeof apiFetch>[1]): Promise<DefaultSystemOutputBody> => {
+
+  return apiFetch<DefaultSystemOutputBody>(getGetDefaultSystemUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDefaultSystemQueryKey = () => {
+    return [
+    `/api/default-system`
+    ] as const;
+    }
+
+
+export const getGetDefaultSystemQueryOptions = <TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDefaultSystemQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDefaultSystem>>> = ({ signal }) => getDefaultSystem({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetDefaultSystemQueryResult = NonNullable<Awaited<ReturnType<typeof getDefaultSystem>>>
+export type GetDefaultSystemQueryError = ErrorType<ErrorModel>
+
+
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDefaultSystem>>,
+          TError,
+          Awaited<ReturnType<typeof getDefaultSystem>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDefaultSystem>>,
+          TError,
+          Awaited<ReturnType<typeof getDefaultSystem>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetDefaultSystemQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

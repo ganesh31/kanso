@@ -1,6 +1,35 @@
 {
   "components": {
     "schemas": {
+      "BacktestResult": {
+        "additionalProperties": false,
+        "properties": {
+          "honesty": {
+            "$ref": "#/components/schemas/Honesty"
+          },
+          "system": {
+            "$ref": "#/components/schemas/System",
+            "description": "The system run, with defaults filled in"
+          },
+          "trade_stats": {
+            "$ref": "#/components/schemas/TradeStats"
+          },
+          "trades": {
+            "description": "Single-stock trades (no slot limits), by symbol then entry date",
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "system",
+          "trades",
+          "trade_stats",
+          "honesty"
+        ],
+        "type": "object"
+      },
       "Bar": {
         "additionalProperties": false,
         "properties": {
@@ -120,6 +149,18 @@
         "required": [
           "per_side_pct",
           "slippage_pct"
+        ],
+        "type": "object"
+      },
+      "DefaultSystemOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "system": {
+            "$ref": "#/components/schemas/System"
+          }
+        },
+        "required": [
+          "system"
         ],
         "type": "object"
       },
@@ -264,6 +305,57 @@
         "required": [
           "stop_pct",
           "trend_sma_weeks"
+        ],
+        "type": "object"
+      },
+      "Honesty": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment": {
+            "type": "string"
+          },
+          "data_end": {
+            "type": "string"
+          },
+          "data_source": {
+            "type": "string"
+          },
+          "data_start": {
+            "description": "First date used: the later of the requested start and the benchmark's first date",
+            "type": "string"
+          },
+          "fill_model": {
+            "type": "string"
+          },
+          "per_side_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedInstrument"
+            },
+            "type": "array"
+          },
+          "slippage_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "survivorship": {
+            "description": "True when the stock list is today's members only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fill_model",
+          "per_side_pct",
+          "slippage_pct",
+          "survivorship",
+          "data_source",
+          "adjustment",
+          "data_start",
+          "data_end",
+          "skipped"
         ],
         "type": "object"
       },
@@ -821,6 +913,25 @@
         ],
         "type": "object"
       },
+      "SkippedInstrument": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "enum": [
+              "no_data"
+            ],
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "reason"
+        ],
+        "type": "object"
+      },
       "System": {
         "additionalProperties": false,
         "properties": {
@@ -857,6 +968,114 @@
           "name",
           "universe",
           "entry"
+        ],
+        "type": "object"
+      },
+      "Trade": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_date": {
+            "description": "Next trading day after the signal; filled at its open",
+            "format": "date",
+            "type": "string"
+          },
+          "entry_price": {
+            "description": "Fill after slippage, before costs",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "exit_price": {
+            "description": "Fill after slippage, before costs; the last close for an open trade",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_reason": {
+            "enum": [
+              "stop",
+              "trend",
+              "open"
+            ],
+            "type": "string"
+          },
+          "gapped_stop": {
+            "description": "The day opened below the stop, so it filled at the open",
+            "type": "boolean"
+          },
+          "holding_days": {
+            "description": "Trading days from entry to exit",
+            "format": "int64",
+            "type": "integer"
+          },
+          "return_pct": {
+            "description": "Per-share return in percent, net of costs and slippage",
+            "format": "double",
+            "type": "number"
+          },
+          "signal_date": {
+            "description": "Signal bar (weekly: the signal week's last trading day)",
+            "format": "date",
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "signal_date",
+          "entry_date",
+          "exit_date",
+          "entry_price",
+          "exit_price",
+          "exit_reason",
+          "gapped_stop",
+          "return_pct",
+          "holding_days"
+        ],
+        "type": "object"
+      },
+      "TradeStats": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_loss_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "avg_win_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "expectancy_pct": {
+            "description": "Mean return per trade, in percent",
+            "format": "double",
+            "type": "number"
+          },
+          "median_holding_days": {
+            "description": "In trading days",
+            "format": "int64",
+            "type": "integer"
+          },
+          "trades": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "win_rate": {
+            "description": "Fraction of trades with a positive return, 0–1",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "trades",
+          "win_rate",
+          "avg_win_pct",
+          "avg_loss_pct",
+          "expectancy_pct",
+          "median_holding_days"
         ],
         "type": "object"
       },
@@ -943,6 +1162,74 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/backtest": {
+      "post": {
+        "operationId": "backtest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Backtest a system over its stock list"
+      }
+    },
     "/api/bars/{symbol}": {
       "get": {
         "operationId": "get-bars",
@@ -1031,6 +1318,34 @@
           }
         },
         "summary": "Daily bars for one chart"
+      }
+    },
+    "/api/default-system": {
+      "get": {
+        "operationId": "get-default-system",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultSystemOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The system the Builder opens on"
       }
     },
     "/api/patterns": {
