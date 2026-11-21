@@ -1153,7 +1153,8 @@
           },
           "reason": {
             "enum": [
-              "price_above_slot"
+              "price_above_slot",
+              "insufficient_cash"
             ],
             "type": "string"
           },

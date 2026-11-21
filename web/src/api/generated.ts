@@ -49,6 +49,7 @@ export type SkippedSignalReason = typeof SkippedSignalReason[keyof typeof Skippe
 
 export const SkippedSignalReason = {
   price_above_slot: 'price_above_slot',
+  insufficient_cash: 'insufficient_cash',
 } as const;
 
 export interface SkippedSignal {

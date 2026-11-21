@@ -15,6 +15,9 @@ const RankingRule = "crowded days ranked by 6-month RS, then symbol"
 const (
 	// SkipPriceAboveSlot: one share costs more than the slot (spec §5.6).
 	SkipPriceAboveSlot = "price_above_slot"
+	// SkipInsufficientCash: one share fits the slot, but the cash left
+	// (slots are capped by cash, spec §5.6) can't buy it.
+	SkipInsufficientCash = "insufficient_cash"
 )
 
 // EquityPoint is a curve's value at one close.
@@ -111,10 +114,16 @@ func Simulate(cands []Trade, closes map[string]*market.Series, calendar []market
 			if len(held) >= p.MaxPositions || holds(tr.Symbol) {
 				continue
 			}
-			alloc := min(prevEquity/float64(p.MaxPositions), cash)
-			qty := ex.Quantity(alloc, tr.EntryPrice+cm.Cost(tr.EntryPrice, Buy), closes[tr.Symbol].Instrument)
+			slot := prevEquity / float64(p.MaxPositions)
+			perShare := tr.EntryPrice + cm.Cost(tr.EntryPrice, Buy)
+			inst := closes[tr.Symbol].Instrument
+			qty := ex.Quantity(min(slot, cash), perShare, inst)
 			if qty == 0 {
-				sim.Skipped = append(sim.Skipped, SkippedSignal{Symbol: tr.Symbol, EntryDate: tr.EntryDate, Reason: SkipPriceAboveSlot})
+				reason := SkipInsufficientCash
+				if ex.Quantity(slot, perShare, inst) == 0 {
+					reason = SkipPriceAboveSlot
+				}
+				sim.Skipped = append(sim.Skipped, SkippedSignal{Symbol: tr.Symbol, EntryDate: tr.EntryDate, Reason: reason})
 				continue
 			}
 			tr.Quantity = qty

@@ -87,7 +87,7 @@ type EquityPoint struct {
 type SkippedSignal struct {
 	Symbol    string      `json:"symbol"`
 	EntryDate market.Date `json:"entry_date" format:"date"`
-	Reason    string      `json:"reason" enum:"price_above_slot"`
+	Reason    string      `json:"reason" enum:"price_above_slot,insufficient_cash"`
 }
 
 // TradeStats are the trade-level metrics over single-stock trades.

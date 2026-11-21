@@ -81,7 +81,10 @@ function PortfolioTiles({ stats }: { stats: PortfolioStats }) {
   );
 }
 
-const SKIP_REASONS: Record<string, string> = { price_above_slot: "price above slot size" };
+const SKIP_REASONS: Record<string, string> = {
+  price_above_slot: "price above slot size",
+  insufficient_cash: "insufficient cash",
+};
 const SKIPPED_SHOWN = 5;
 
 /** "1 signal skipped: price above slot size (MRF 2024-03-04)", one line per reason. */

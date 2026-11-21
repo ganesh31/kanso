@@ -197,6 +197,22 @@ func TestSimulateSkipsZeroShareTrade(t *testing.T) {
 	}
 }
 
+func TestSimulateSkipsWhenCashIsShortOfOneShare(t *testing.T) {
+	cal := simDates(10)
+	// AAA: 5 shares at 100 use 500 of the 1,000 capital, then the stock
+	// triples, so equity is 2,000 and the slot (equity ÷ 2) is 1,000. One BBB
+	// share (600) fits the slot but not the 500 cash left.
+	aaa := closesAt("AAA", cal, 100, 100, 300, 300, 300, 300, 300, 300, 300, 300)
+	sim := simulate([]Trade{
+		cand("AAA", cal, 1, 9, 100, 0.9),
+		cand("BBB", cal, 4, 9, 600, 0.5),
+	}, cal, 1000, 2, aaa, flatCloses("BBB", cal, 600))
+	want := SkippedSignal{Symbol: "BBB", EntryDate: cal[4], Reason: "insufficient_cash"}
+	if len(sim.Skipped) != 1 || sim.Skipped[0] != want {
+		t.Fatalf("skipped %+v, want %+v", sim.Skipped, want)
+	}
+}
+
 func TestSimulateSameDayStopAndExposure(t *testing.T) {
 	cal := simDates(10)
 	sim := simulate([]Trade{

@@ -78,7 +78,10 @@ const result: BacktestResult = {
     data_end: "2026-11-20",
     ranking_rule: "crowded days ranked by 6-month RS, then symbol",
     skipped: [],
-    skipped_signals: [{ symbol: "MRF", entry_date: "2024-03-04", reason: "price_above_slot" }],
+    skipped_signals: [
+      { symbol: "MRF", entry_date: "2024-03-04", reason: "price_above_slot" },
+      { symbol: "HDFCBANK", entry_date: "2014-05-12", reason: "insufficient_cash" },
+    ],
   },
   portfolio_trades: [],
   portfolio: {
@@ -165,6 +168,7 @@ describe("BacktestPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     expect(await screen.findByText(/crowded days ranked by 6-month RS, then symbol/)).toBeInTheDocument();
     expect(screen.getByText(/1 signal skipped: price above slot size \(MRF 2024-03-04\)/)).toBeInTheDocument();
+    expect(screen.getByText(/1 signal skipped: insufficient cash \(HDFCBANK 2014-05-12\)/)).toBeInTheDocument();
   });
 
   test("lists every trade with its exit reason", async () => {
