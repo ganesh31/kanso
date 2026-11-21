@@ -1,5 +1,5 @@
 import type { Evidence, ReportLine } from "@/api/client";
-import { formatAge, formatPctVs, formatPrice, humanize } from "@/lib/format";
+import { formatAge, formatPctVs, formatPrice, formatSignedPct, formatVolume, humanize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,6 +13,17 @@ export function describeEvidence(ev: Evidence, asOf: string): string {
         `Old high ${formatPrice(ev.level)} set ${ev.level_date}, ${formatAge(ev.level_date, asOf)} ` +
         `(${ev.bars_since} bars); close ${formatPrice(ev.close)}, ${formatPctVs(ev.pct_above)}`
       );
+    case "level_age":
+      return `Old high set ${ev.level_date}, ${formatAge(ev.level_date, asOf)} (${ev.bars_since} bars)`;
+    case "not_extended":
+      return `Close ${formatPctVs(ev.pct_above)} the breakout level`;
+    case "relative_strength":
+      return (
+        `Stock ${formatSignedPct(ev.stock_return * 100)} vs benchmark ${formatSignedPct(ev.bench_return * 100)}: ` +
+        `${Math.abs(ev.diff * 100).toFixed(2)} points ${ev.diff > 0 ? "ahead" : "behind"}`
+      );
+    case "volume_surge":
+      return `Volume ${ev.ratio.toFixed(2)}× the average of ${formatVolume(ev.avg_volume)}`;
     case "not_evaluable":
       return `not evaluable (${humanize(ev.reason)})`;
     default: {
