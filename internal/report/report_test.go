@@ -42,7 +42,7 @@ func provider() market.Provider {
 }
 
 func TestReportAllPatternsDefaultOrder(t *testing.T) {
-	r, err := Run(context.Background(), provider(), "BREAK", "", market.Daily)
+	r, err := Run(context.Background(), provider(), "BREAK", nil, "", market.Daily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestReportWithoutBenchmarkStillEvaluatesOthers(t *testing.T) {
 	}
 	prov := market.NewMemProvider([]market.Instrument{{ID: 1, Symbol: "BREAK", Type: market.Equity}},
 		map[string][]market.Bar{"BREAK": brk}, nil)
-	r, err := Run(context.Background(), prov, "BREAK", "", market.Daily)
+	r, err := Run(context.Background(), prov, "BREAK", nil, "", market.Daily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestReportWeeklyEvaluatesLastCompleteWeek(t *testing.T) {
 	// BREAK's last bar, Thu 2022-03-10 (bar 799), is in a forming week; the
 	// last complete week ends Sun 2022-03-06 (bar 795). Its 800 calendar
 	// days are ~114 weeks, short of the 156 weeks 3 years needs.
-	r, err := Run(context.Background(), provider(), "BREAK", "", market.Weekly)
+	r, err := Run(context.Background(), provider(), "BREAK", nil, "", market.Weekly)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestReportWeeklyEvaluatesLastCompleteWeek(t *testing.T) {
 
 func TestReportAsOfUsesLastBarOnOrBefore(t *testing.T) {
 	// As of bar 500 the breakout on the last bar hasn't happened yet.
-	r, err := Run(context.Background(), provider(), "BREAK", date(500), market.Daily)
+	r, err := Run(context.Background(), provider(), "BREAK", nil, date(500), market.Daily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestReportAsOfUsesLastBarOnOrBefore(t *testing.T) {
 }
 
 func TestReportInsufficientHistoryShown(t *testing.T) {
-	r, err := Run(context.Background(), provider(), "NEW", "", market.Daily)
+	r, err := Run(context.Background(), provider(), "NEW", nil, "", market.Daily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestReportInsufficientHistoryShown(t *testing.T) {
 }
 
 func TestReportBeforeFirstBarIsInsufficientHistory(t *testing.T) {
-	r, err := Run(context.Background(), provider(), "NEW", "2000-01-01", market.Daily)
+	r, err := Run(context.Background(), provider(), "NEW", nil, "2000-01-01", market.Daily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func gappyProvider() market.Provider {
 }
 
 func TestReportDataGapAgainstBenchmarkCalendar(t *testing.T) {
-	r, err := Run(context.Background(), gappyProvider(), "GAPPY", "", market.Daily)
+	r, err := Run(context.Background(), gappyProvider(), "GAPPY", nil, "", market.Daily)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestReportDataGapAgainstBenchmarkCalendar(t *testing.T) {
 }
 
 func TestReportUnknownSymbol(t *testing.T) {
-	_, err := Run(context.Background(), provider(), "NOPE", "", market.Daily)
+	_, err := Run(context.Background(), provider(), "NOPE", nil, "", market.Daily)
 	if !errors.Is(err, market.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}

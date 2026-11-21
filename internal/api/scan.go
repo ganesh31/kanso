@@ -169,13 +169,8 @@ func (h *handlers) validate(_ context.Context, in *ValidateInput) (*ValidateOutp
 // mapScanError maps a validation error to 400 with one body field per
 // problem, and an unknown stock list to 404.
 func mapScanError(err error, universe string) error {
-	var ve *rules.ValidationError
-	if errors.As(err, &ve) {
-		details := make([]error, len(ve.Errors))
-		for i, fe := range ve.Errors {
-			details[i] = &huma.ErrorDetail{Message: fe.Message, Location: "body." + fe.Path}
-		}
-		return huma.Error400BadRequest("invalid request", details...)
+	if p := validationProblem(err, "body."); p != nil {
+		return p
 	}
 	if errors.Is(err, market.ErrNotFound) {
 		return huma.Error404NotFound("unknown stock list " + universe)

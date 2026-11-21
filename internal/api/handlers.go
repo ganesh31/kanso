@@ -10,10 +10,12 @@ import (
 	"kanso/internal/market"
 	"kanso/internal/patterns"
 	"kanso/internal/report"
+	"kanso/internal/rules"
 )
 
 type handlers struct {
-	prov market.Provider
+	prov    market.Provider
+	systems SystemStore
 }
 
 func register(api huma.API, h *handlers) {
@@ -38,6 +40,7 @@ func register(api huma.API, h *handlers) {
 		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, h.bars)
 	registerScan(api, h)
+	registerSystems(api, h)
 	registerBacktest(api, h)
 }
 
@@ -56,11 +59,15 @@ func (h *handlers) patterns(_ context.Context, _ *struct{}) (*PatternsOutput, er
 
 // ReportRequest is the optional body of a stock report.
 type ReportRequest struct {
+	// System, when present, is reported instead of every pattern: its
+	// conditions, its timeframe and its entry rule's outcome. It need not be
+	// saved.
+	System *rules.System `json:"system,omitempty" doc:"Report this system's conditions and outcome instead of every pattern; it need not be saved"`
 	// AsOf evaluates the last bar on or before this date; empty means the
 	// latest bar.
 	AsOf market.Date `json:"as_of,omitempty" format:"date" doc:"Evaluate the last bar on or before this date (default: latest)"`
 	// Timeframe of the bars every condition evaluates on.
-	Timeframe market.Timeframe `json:"timeframe,omitempty" enum:"daily,weekly" default:"daily" doc:"Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars"`
+	Timeframe market.Timeframe `json:"timeframe,omitempty" enum:"daily,weekly" default:"daily" doc:"Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars. Ignored with a system, which has its own"`
 }
 
 // ReportInput is the stock report request.
@@ -92,6 +99,9 @@ type Report struct {
 	Level     *float64         `json:"level,omitempty" doc:"Breakout level at as_of, if any"`
 	LevelDate *market.Date     `json:"level_date,omitempty" doc:"Date the breakout level was set"`
 	Lines     []ReportLine     `json:"lines"`
+	// SystemOutcome is the system's entry rule on as_of, when the request
+	// had a system.
+	SystemOutcome *Outcome `json:"system_outcome,omitempty" doc:"The system's entry rule on as_of (only with a system)"`
 }
 
 // ReportOutput is the stock report response.
@@ -107,14 +117,21 @@ func (h *handlers) report(ctx context.Context, in *ReportInput) (*ReportOutput, 
 			req.Timeframe = market.Daily
 		}
 	}
-	rep, err := report.Run(ctx, h.prov, in.Symbol, req.AsOf, req.Timeframe)
+	rep, err := report.Run(ctx, h.prov, in.Symbol, req.System, req.AsOf, req.Timeframe)
 	if err != nil {
+		if p := validationProblem(err, "body.system."); p != nil {
+			return nil, p
+		}
 		return nil, mapError(err, in.Symbol)
 	}
 	out := &ReportOutput{Body: Report{
 		Symbol: rep.Symbol, AsOf: rep.AsOf, Timeframe: rep.Timeframe,
 		Level: rep.Level, LevelDate: rep.LevelDate, Lines: make([]ReportLine, len(rep.Lines)),
 	}}
+	if rep.SystemOutcome != nil {
+		o := toOutcome(*rep.SystemOutcome)
+		out.Body.SystemOutcome = &o
+	}
 	for i, l := range rep.Lines {
 		out.Body.Lines[i] = ReportLine{
 			Type: l.Type, Label: l.Label, Params: l.Params,

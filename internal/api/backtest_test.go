@@ -24,7 +24,7 @@ func backtestServer(t *testing.T) *httptest.Server {
 	prov := market.NewMemProvider(
 		[]market.Instrument{{ID: 1, Symbol: "BREAK", Type: market.Equity}, {ID: 2, Symbol: "EMPTY", Type: market.Equity}},
 		map[string][]market.Bar{"BREAK": bars}, map[string][]string{"NIFTY50": {"BREAK", "EMPTY"}})
-	srv := httptest.NewServer(New(prov, Config{}))
+	srv := httptest.NewServer(New(prov, NewMemSystems(), Config{}))
 	t.Cleanup(srv.Close)
 	return srv
 }

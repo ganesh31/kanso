@@ -84,7 +84,7 @@ func Run(ctx context.Context, prov market.Provider, sys rules.System, from, to m
 	if to == "" {
 		to = "9999-12-31"
 	}
-	bench, err := loadBench(ctx, prov, benchmarkOf(sys.Entry), to)
+	bench, err := loadBench(ctx, prov, sys.Entry.Benchmark(), to)
 	if err != nil {
 		return nil, err
 	}
@@ -194,19 +194,6 @@ func singleStockTrades(sigs []int, ctx *patterns.Context, daily *market.Series, 
 		out = append(out, tr)
 	}
 	return out
-}
-
-// benchmarkOf is the benchmark the rule's relative strength uses, or the
-// default (Nifty 50).
-func benchmarkOf(e rules.Entry) string {
-	for _, c := range append(append([]rules.Condition{}, e.All...), e.Any...) {
-		if c.Type == patterns.TypeRelativeStrength {
-			if b := c.Params.String("benchmark"); b != "" {
-				return b
-			}
-		}
-	}
-	return patterns.DefaultBenchmark
 }
 
 // loadBench loads the benchmark's daily bars up to to, or nil when the

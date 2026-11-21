@@ -22,6 +22,19 @@ type Entry struct {
 	Any []Condition `json:"any,omitempty"`
 }
 
+// Benchmark is the benchmark the rule's relative strength uses, or the
+// default (Nifty 50).
+func (e Entry) Benchmark() string {
+	for _, c := range append(append([]Condition{}, e.All...), e.Any...) {
+		if c.Type == patterns.TypeRelativeStrength {
+			if b := c.Params.String("benchmark"); b != "" {
+				return b
+			}
+		}
+	}
+	return patterns.DefaultBenchmark
+}
+
 // Exits are the exit rules (spec §5.4). TrendSMAWeeks 0 disables the
 // trend exit.
 type Exits struct {

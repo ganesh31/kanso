@@ -34,7 +34,7 @@ func server(t *testing.T) *httptest.Server {
 		"index.html":    {Data: []byte("<!doctype html><title>Kanso</title>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
-	srv := httptest.NewServer(New(prov, Config{Static: static}))
+	srv := httptest.NewServer(New(prov, NewMemSystems(), Config{Static: static}))
 	t.Cleanup(srv.Close)
 	return srv
 }

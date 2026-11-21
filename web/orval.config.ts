@@ -20,6 +20,8 @@ export default defineConfig({
           "stock-report": { query: { useQuery: true, useMutation: false } },
           // A quick scan is a read too; its request lives in the URL, so it is a cached query.
           "quick-scan": { query: { useQuery: true, useMutation: false } },
+          // So is a saved-system scan.
+          scan: { query: { useQuery: true, useMutation: false } },
         },
       },
     },
