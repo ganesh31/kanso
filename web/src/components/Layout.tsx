@@ -32,9 +32,18 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
-        <Link to="/" className="text-lg font-semibold tracking-tight">
-          Kanso
-        </Link>
+        <nav className="flex items-center gap-4">
+          <Link to="/" className="text-lg font-semibold tracking-tight">
+            Kanso
+          </Link>
+          <Link
+            to="/scanner"
+            className="text-muted-foreground hover:text-foreground text-sm"
+            activeProps={{ className: "text-foreground" }}
+          >
+            Scanner
+          </Link>
+        </nav>
         <SymbolSearch />
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>

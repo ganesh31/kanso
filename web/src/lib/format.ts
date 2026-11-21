@@ -47,6 +47,15 @@ export function formatAge(from: string, to: string): string {
   return `${parts.filter(Boolean).join(" ")} ago`;
 }
 
+/** "1y 10m", "3m", "<1m": a level's age for table cells. */
+export function formatAgeShort(from: string, to: string): string {
+  const months = monthsBetween(from, to);
+  if (months === 0) return "<1m";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return [years > 0 ? `${years}y` : "", rest > 0 ? `${rest}m` : ""].filter(Boolean).join(" ");
+}
+
 /** "insufficient_history" → "insufficient history". */
 export function humanize(code: string): string {
   return code.replaceAll("_", " ");
