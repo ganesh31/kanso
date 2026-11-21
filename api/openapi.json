@@ -4,8 +4,32 @@
       "BacktestResult": {
         "additionalProperties": false,
         "properties": {
+          "benchmark": {
+            "description": "Buy-and-hold Nifty 50 from the same capital, on the same dates",
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "type": "array"
+          },
+          "equity": {
+            "description": "Portfolio value at each close from the data start",
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "type": "array"
+          },
           "honesty": {
             "$ref": "#/components/schemas/Honesty"
+          },
+          "portfolio": {
+            "$ref": "#/components/schemas/PortfolioStats"
+          },
+          "portfolio_trades": {
+            "description": "Trades the portfolio held, by entry date then rank",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioTrade"
+            },
+            "type": "array"
           },
           "system": {
             "$ref": "#/components/schemas/System",
@@ -26,6 +50,10 @@
           "system",
           "trades",
           "trade_stats",
+          "portfolio_trades",
+          "portfolio",
+          "equity",
+          "benchmark",
           "honesty"
         ],
         "type": "object"
@@ -185,6 +213,25 @@
         ],
         "type": "object"
       },
+      "EquityPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "type": "string"
+          },
+          "value": {
+            "description": "Rupees",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "value"
+        ],
+        "type": "object"
+      },
       "ErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -331,9 +378,20 @@
             "format": "double",
             "type": "number"
           },
+          "ranking_rule": {
+            "description": "How crowded entry days are ranked",
+            "type": "string"
+          },
           "skipped": {
             "items": {
               "$ref": "#/components/schemas/SkippedInstrument"
+            },
+            "type": "array"
+          },
+          "skipped_signals": {
+            "description": "Portfolio signals skipped with a slot free, by entry date",
+            "items": {
+              "$ref": "#/components/schemas/SkippedSignal"
             },
             "type": "array"
           },
@@ -355,7 +413,9 @@
           "adjustment",
           "data_start",
           "data_end",
-          "skipped"
+          "ranking_rule",
+          "skipped",
+          "skipped_signals"
         ],
         "type": "object"
       },
@@ -689,6 +749,123 @@
         ],
         "type": "object"
       },
+      "PortfolioStats": {
+        "additionalProperties": false,
+        "properties": {
+          "bench_cagr": {
+            "description": "Buy-and-hold Nifty 50's CAGR, a fraction",
+            "format": "double",
+            "type": "number"
+          },
+          "bench_max_drawdown": {
+            "description": "Buy-and-hold Nifty 50's max drawdown, a fraction ≤ 0",
+            "format": "double",
+            "type": "number"
+          },
+          "cagr": {
+            "description": "Compound annual growth rate, a fraction (0.12 is 12%)",
+            "format": "double",
+            "type": "number"
+          },
+          "exposure": {
+            "description": "Fraction of trading days with a position held, 0–1",
+            "format": "double",
+            "type": "number"
+          },
+          "final_equity": {
+            "description": "Rupees at the last close",
+            "format": "double",
+            "type": "number"
+          },
+          "max_drawdown": {
+            "description": "Deepest fall from a peak, a fraction ≤ 0",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "cagr",
+          "max_drawdown",
+          "final_equity",
+          "exposure",
+          "bench_cagr",
+          "bench_max_drawdown"
+        ],
+        "type": "object"
+      },
+      "PortfolioTrade": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_date": {
+            "description": "Next trading day after the signal; filled at its open",
+            "format": "date",
+            "type": "string"
+          },
+          "entry_price": {
+            "description": "Fill after slippage, before costs",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "exit_price": {
+            "description": "Fill after slippage, before costs; the last close for an open trade",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_reason": {
+            "enum": [
+              "stop",
+              "trend",
+              "open"
+            ],
+            "type": "string"
+          },
+          "gapped_stop": {
+            "description": "The day opened below the stop, so it filled at the open",
+            "type": "boolean"
+          },
+          "holding_days": {
+            "description": "Trading days from entry to exit",
+            "format": "int64",
+            "type": "integer"
+          },
+          "quantity": {
+            "description": "Whole shares bought",
+            "format": "int64",
+            "type": "integer"
+          },
+          "return_pct": {
+            "description": "Per-share return in percent, net of costs and slippage",
+            "format": "double",
+            "type": "number"
+          },
+          "signal_date": {
+            "description": "Signal bar (weekly: the signal week's last trading day)",
+            "format": "date",
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity",
+          "symbol",
+          "signal_date",
+          "entry_date",
+          "exit_date",
+          "entry_price",
+          "exit_price",
+          "exit_reason",
+          "gapped_stop",
+          "return_pct",
+          "holding_days"
+        ],
+        "type": "object"
+      },
       "QuickscanRequest": {
         "additionalProperties": false,
         "properties": {
@@ -963,6 +1140,30 @@
         },
         "required": [
           "symbol",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "SkippedSignal": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "price_above_slot"
+            ],
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "entry_date",
           "reason"
         ],
         "type": "object"

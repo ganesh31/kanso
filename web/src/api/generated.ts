@@ -26,6 +26,12 @@ import type {
 
 import { apiFetch } from './fetcher.ts';
 import type { ErrorType } from './fetcher.ts';
+export interface EquityPoint {
+  date: string;
+  /** Rupees */
+  value: number;
+}
+
 export type SkippedInstrumentReason = typeof SkippedInstrumentReason[keyof typeof SkippedInstrumentReason];
 
 
@@ -38,6 +44,19 @@ export interface SkippedInstrument {
   symbol: string;
 }
 
+export type SkippedSignalReason = typeof SkippedSignalReason[keyof typeof SkippedSignalReason];
+
+
+export const SkippedSignalReason = {
+  price_above_slot: 'price_above_slot',
+} as const;
+
+export interface SkippedSignal {
+  entry_date: string;
+  reason: SkippedSignalReason;
+  symbol: string;
+}
+
 export interface Honesty {
   adjustment: string;
   data_end: string;
@@ -46,10 +65,60 @@ export interface Honesty {
   data_start: string;
   fill_model: string;
   per_side_pct: number;
+  /** How crowded entry days are ranked */
+  ranking_rule: string;
   skipped: SkippedInstrument[];
+  /** Portfolio signals skipped with a slot free, by entry date */
+  skipped_signals: SkippedSignal[];
   slippage_pct: number;
   /** True when the stock list is today's members only */
   survivorship: boolean;
+}
+
+export interface PortfolioStats {
+  /** Buy-and-hold Nifty 50's CAGR, a fraction */
+  bench_cagr: number;
+  /** Buy-and-hold Nifty 50's max drawdown, a fraction ≤ 0 */
+  bench_max_drawdown: number;
+  /** Compound annual growth rate, a fraction (0.12 is 12%) */
+  cagr: number;
+  /** Fraction of trading days with a position held, 0–1 */
+  exposure: number;
+  /** Rupees at the last close */
+  final_equity: number;
+  /** Deepest fall from a peak, a fraction ≤ 0 */
+  max_drawdown: number;
+}
+
+export type PortfolioTradeExitReason = typeof PortfolioTradeExitReason[keyof typeof PortfolioTradeExitReason];
+
+
+export const PortfolioTradeExitReason = {
+  stop: 'stop',
+  trend: 'trend',
+  open: 'open',
+} as const;
+
+export interface PortfolioTrade {
+  /** Next trading day after the signal; filled at its open */
+  entry_date: string;
+  /** Fill after slippage, before costs */
+  entry_price: number;
+  exit_date: string;
+  /** Fill after slippage, before costs; the last close for an open trade */
+  exit_price: number;
+  exit_reason: PortfolioTradeExitReason;
+  /** The day opened below the stop, so it filled at the open */
+  gapped_stop: boolean;
+  /** Trading days from entry to exit */
+  holding_days: number;
+  /** Whole shares bought */
+  quantity: number;
+  /** Per-share return in percent, net of costs and slippage */
+  return_pct: number;
+  /** Signal bar (weekly: the signal week's last trading day) */
+  signal_date: string;
+  symbol: string;
 }
 
 export interface Costs {
@@ -146,7 +215,14 @@ export interface Trade {
 }
 
 export interface BacktestResult {
+  /** Buy-and-hold Nifty 50 from the same capital, on the same dates */
+  benchmark: EquityPoint[];
+  /** Portfolio value at each close from the data start */
+  equity: EquityPoint[];
   honesty: Honesty;
+  portfolio: PortfolioStats;
+  /** Trades the portfolio held, by entry date then rank */
+  portfolio_trades: PortfolioTrade[];
   /** The system run, with defaults filled in */
   system: System;
   trade_stats: TradeStats;

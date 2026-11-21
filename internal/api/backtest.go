@@ -60,6 +60,36 @@ type Trade struct {
 	HoldingDays int `json:"holding_days" doc:"Trading days from entry to exit"`
 }
 
+// PortfolioTrade is a trade the portfolio held.
+type PortfolioTrade struct {
+	Trade
+	Quantity int64 `json:"quantity" doc:"Whole shares bought"`
+}
+
+// PortfolioStats are the portfolio metrics next to buy-and-hold Nifty's.
+type PortfolioStats struct {
+	CAGR             float64 `json:"cagr" doc:"Compound annual growth rate, a fraction (0.12 is 12%)"`
+	MaxDrawdown      float64 `json:"max_drawdown" doc:"Deepest fall from a peak, a fraction ≤ 0"`
+	FinalEquity      float64 `json:"final_equity" doc:"Rupees at the last close"`
+	Exposure         float64 `json:"exposure" doc:"Fraction of trading days with a position held, 0–1"`
+	BenchCAGR        float64 `json:"bench_cagr" doc:"Buy-and-hold Nifty 50's CAGR, a fraction"`
+	BenchMaxDrawdown float64 `json:"bench_max_drawdown" doc:"Buy-and-hold Nifty 50's max drawdown, a fraction ≤ 0"`
+}
+
+// EquityPoint is a curve's value at one close.
+type EquityPoint struct {
+	Date  market.Date `json:"date" format:"date"`
+	Value float64     `json:"value" doc:"Rupees"`
+}
+
+// SkippedSignal is a portfolio candidate with a free slot that could not
+// buy one whole share.
+type SkippedSignal struct {
+	Symbol    string      `json:"symbol"`
+	EntryDate market.Date `json:"entry_date" format:"date"`
+	Reason    string      `json:"reason" enum:"price_above_slot"`
+}
+
 // TradeStats are the trade-level metrics over single-stock trades.
 type TradeStats struct {
 	Trades            int     `json:"trades"`
@@ -86,7 +116,10 @@ type Honesty struct {
 	Adjustment   string              `json:"adjustment"`
 	DataStart    market.Date         `json:"data_start" doc:"First date used: the later of the requested start and the benchmark's first date"`
 	DataEnd      market.Date         `json:"data_end"`
+	RankingRule  string              `json:"ranking_rule" doc:"How crowded entry days are ranked"`
 	Skipped      []SkippedInstrument `json:"skipped"`
+	// SkippedSignals are listed by entry date.
+	SkippedSignals []SkippedSignal `json:"skipped_signals" doc:"Portfolio signals skipped with a slot free, by entry date"`
 }
 
 // BacktestResult is a backtest's output.
@@ -94,7 +127,12 @@ type BacktestResult struct {
 	System     rules.System `json:"system" doc:"The system run, with defaults filled in"`
 	Trades     []Trade      `json:"trades" doc:"Single-stock trades (no slot limits), by symbol then entry date"`
 	TradeStats TradeStats   `json:"trade_stats"`
-	Honesty    Honesty      `json:"honesty"`
+	// PortfolioTrades are by entry date, then rank.
+	PortfolioTrades []PortfolioTrade `json:"portfolio_trades" doc:"Trades the portfolio held, by entry date then rank"`
+	Portfolio       PortfolioStats   `json:"portfolio"`
+	Equity          []EquityPoint    `json:"equity" doc:"Portfolio value at each close from the data start"`
+	Benchmark       []EquityPoint    `json:"benchmark" doc:"Buy-and-hold Nifty 50 from the same capital, on the same dates"`
+	Honesty         Honesty          `json:"honesty"`
 }
 
 // BacktestOutput is a backtest response.
@@ -111,13 +149,20 @@ func (h *handlers) backtest(ctx context.Context, in *BacktestInput) (*BacktestOu
 }
 
 func toBacktestResult(r *backtest.Result) BacktestResult {
-	out := BacktestResult{System: r.System, Trades: make([]Trade, len(r.AllTrades))}
+	out := BacktestResult{
+		System: r.System, Trades: make([]Trade, len(r.AllTrades)), PortfolioTrades: make([]PortfolioTrade, len(r.Taken)),
+		Equity: toPoints(r.Equity), Benchmark: toPoints(r.Benchmark),
+	}
 	for i, t := range r.AllTrades {
-		out.Trades[i] = Trade{
-			Symbol: t.Symbol, SignalDate: t.SignalDate, EntryDate: t.EntryDate, ExitDate: t.ExitDate,
-			EntryPrice: t.EntryPrice, ExitPrice: t.ExitPrice, ExitReason: string(t.ExitReason), GappedStop: t.GappedStop,
-			ReturnPct: t.ReturnPct, HoldingDays: t.HoldingDays,
-		}
+		out.Trades[i] = toTrade(t)
+	}
+	for i, t := range r.Taken {
+		out.PortfolioTrades[i] = PortfolioTrade{Trade: toTrade(t), Quantity: t.Quantity}
+	}
+	p := r.Portfolio
+	out.Portfolio = PortfolioStats{
+		CAGR: p.CAGR, MaxDrawdown: p.MaxDrawdown, FinalEquity: p.FinalEquity, Exposure: p.Exposure,
+		BenchCAGR: p.BenchCAGR, BenchMaxDrawdown: p.BenchMaxDrawdown,
 	}
 	s := r.TradeStats
 	out.TradeStats = TradeStats{
@@ -128,10 +173,31 @@ func toBacktestResult(r *backtest.Result) BacktestResult {
 	out.Honesty = Honesty{
 		FillModel: h.FillModel, PerSidePct: h.PerSidePct, SlippagePct: h.SlippagePct, Survivorship: h.Survivorship,
 		DataSource: h.DataSource, Adjustment: h.Adjustment, DataStart: h.DataStart, DataEnd: h.DataEnd,
-		Skipped: make([]SkippedInstrument, len(h.Skipped)),
+		RankingRule: h.RankingRule, Skipped: make([]SkippedInstrument, len(h.Skipped)),
+		SkippedSignals: make([]SkippedSignal, len(h.SkippedSignals)),
 	}
 	for i, sk := range h.Skipped {
 		out.Honesty.Skipped[i] = SkippedInstrument{Symbol: sk.Symbol, Reason: sk.Reason}
+	}
+	for i, sk := range h.SkippedSignals {
+		out.Honesty.SkippedSignals[i] = SkippedSignal{Symbol: sk.Symbol, EntryDate: sk.EntryDate, Reason: sk.Reason}
+	}
+	return out
+}
+
+// toTrade leaves out RankKey, which can be -Inf (no JSON for it).
+func toTrade(t backtest.Trade) Trade {
+	return Trade{
+		Symbol: t.Symbol, SignalDate: t.SignalDate, EntryDate: t.EntryDate, ExitDate: t.ExitDate,
+		EntryPrice: t.EntryPrice, ExitPrice: t.ExitPrice, ExitReason: string(t.ExitReason), GappedStop: t.GappedStop,
+		ReturnPct: t.ReturnPct, HoldingDays: t.HoldingDays,
+	}
+}
+
+func toPoints(ps []backtest.EquityPoint) []EquityPoint {
+	out := make([]EquityPoint, len(ps))
+	for i, p := range ps {
+		out[i] = EquityPoint{Date: p.Date, Value: p.Value}
 	}
 	return out
 }
