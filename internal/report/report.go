@@ -4,6 +4,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -44,8 +45,11 @@ func Run(ctx context.Context, prov market.Provider, symbol string, asOf market.D
 	if to == "" {
 		to = "9999-12-31"
 	}
-	// No benchmark yet: no V1 pattern in the registry needs one so far.
-	pctx, _, err := patterns.Load(ctx, prov, inst, nil, tf, "", to)
+	bench, err := loadBenchmark(ctx, prov, to)
+	if err != nil {
+		return nil, err
+	}
+	pctx, _, err := patterns.Load(ctx, prov, inst, bench, tf, "", to)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +81,25 @@ func Run(ctx context.Context, prov market.Provider, symbol string, asOf market.D
 		rep.Level, rep.LevelDate = &level, &levelDate
 	}
 	return rep, nil
+}
+
+// loadBenchmark loads the default benchmark's daily bars up to to (the
+// report runs default params, so relative strength uses it). A missing
+// benchmark is not an error: relative strength reports benchmark_missing
+// and every other condition still evaluates.
+func loadBenchmark(ctx context.Context, prov market.Provider, to market.Date) (*market.Series, error) {
+	inst, err := prov.Instrument(ctx, patterns.DefaultBenchmark)
+	if errors.Is(err, market.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("benchmark %s: %w", patterns.DefaultBenchmark, err)
+	}
+	bars, err := prov.Daily(ctx, inst.ID, "", to)
+	if err != nil {
+		return nil, fmt.Errorf("benchmark %s: %w", patterns.DefaultBenchmark, err)
+	}
+	return market.NewDaily(inst, bars), nil
 }
 
 // reportOrder puts context providers (n_year_high, which provides the
