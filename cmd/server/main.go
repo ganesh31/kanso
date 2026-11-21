@@ -28,7 +28,7 @@ func main() {
 }
 
 func run() error {
-	dbPath := flag.String("db", "", "SQLite database written by cmd/ingest (opened read-only)")
+	dbPath := flag.String("db", "", "SQLite database written by cmd/ingest (saved systems are written to it)")
 	addr := flag.String("addr", ":8080", "listen address")
 	webDir := flag.String("web", "web/dist", "directory of the built web app (empty: none)")
 	dump := flag.Bool("dump-openapi", false, "print the OpenAPI spec as JSON and exit")
@@ -47,7 +47,7 @@ func run() error {
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	prov, err := data.Open(*dbPath, true)
+	prov, err := data.Open(*dbPath, false)
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func run() error {
 		}
 	}
 
-	srv := &http.Server{Addr: *addr, Handler: api.New(prov, cfg), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: *addr, Handler: api.New(prov, api.StoreSystems{S: prov}, cfg), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errc := make(chan error, 1)

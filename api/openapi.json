@@ -696,6 +696,10 @@
           "symbol": {
             "type": "string"
           },
+          "system_outcome": {
+            "$ref": "#/components/schemas/Outcome",
+            "description": "The system's entry rule on as_of (only with a system)"
+          },
           "timeframe": {
             "enum": [
               "daily",
@@ -745,9 +749,13 @@
             "format": "date",
             "type": "string"
           },
+          "system": {
+            "$ref": "#/components/schemas/System",
+            "description": "Report this system's conditions and outcome instead of every pattern; it need not be saved"
+          },
           "timeframe": {
             "default": "daily",
-            "description": "Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars",
+            "description": "Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars. Ignored with a system, which has its own",
             "enum": [
               "daily",
               "weekly"
@@ -774,6 +782,33 @@
           "pass",
           "evaluable",
           "evidence"
+        ],
+        "type": "object"
+      },
+      "ScanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "description": "Scan as of this date (default: the latest benchmark date)",
+            "format": "date",
+            "type": "string"
+          },
+          "mode": {
+            "default": "fresh",
+            "description": "fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now",
+            "enum": [
+              "fresh",
+              "all"
+            ],
+            "type": "string"
+          },
+          "system": {
+            "$ref": "#/components/schemas/System",
+            "description": "The system to scan; it need not be saved"
+          }
+        },
+        "required": [
+          "system"
         ],
         "type": "object"
       },
@@ -857,6 +892,21 @@
           "name",
           "universe",
           "entry"
+        ],
+        "type": "object"
+      },
+      "SystemsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "systems": {
+            "items": {
+              "$ref": "#/components/schemas/System"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "systems"
         ],
         "type": "object"
       },
@@ -1206,6 +1256,347 @@
           }
         },
         "summary": "Evaluate every pattern on one stock"
+      }
+    },
+    "/api/scan": {
+      "post": {
+        "operationId": "scan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Scan a system's stock list"
+      }
+    },
+    "/api/systems": {
+      "get": {
+        "operationId": "list-systems",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List saved systems"
+      },
+      "post": {
+        "operationId": "create-system",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Save a new system"
+      }
+    },
+    "/api/systems/{id}": {
+      "delete": {
+        "operationId": "delete-system",
+        "parameters": [
+          {
+            "description": "Saved system id (a UUID)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Saved system id (a UUID)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Delete a saved system"
+      },
+      "get": {
+        "operationId": "get-system",
+        "parameters": [
+          {
+            "description": "Saved system id (a UUID)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Saved system id (a UUID)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get a saved system"
+      },
+      "put": {
+        "operationId": "update-system",
+        "parameters": [
+          {
+            "description": "Saved system id (a UUID)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Saved system id (a UUID)",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Replace a saved system"
       }
     },
     "/api/universes": {
