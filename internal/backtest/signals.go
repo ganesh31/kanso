@@ -1,5 +1,6 @@
-// Package backtest turns an entry rule into signals and trades. So far it
-// holds signal detection, which the scanner shares.
+// Package backtest turns an entry rule into signals and trades: signal
+// detection (shared with the scanner), honest fills and exits, trade-level
+// stats and Run over a stock list.
 package backtest
 
 import (

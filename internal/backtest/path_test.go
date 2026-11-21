@@ -235,6 +235,23 @@ func TestOpenTradeReturnHasNoExitCost(t *testing.T) {
 	}
 }
 
+func TestSingleStockSkipsSignalsWhileTradeOpen(t *testing.T) {
+	// Signals at 2, 4 and 8. The trade from 2 enters at 3 and is stopped at
+	// 6, so the signal at 4 (entry 5) is skipped and the one at 8 taken.
+	pass := make([]bool, 20)
+	pass[2], pass[4], pass[8] = true, true, true
+	c, ctx := stubRule(t, pass, nil)
+	bars := flatDays(20)
+	setBar(bars, 6, 95, 80, 85)
+	ctx.Series.Bars = bars
+	ctx.Series.Instrument.Symbol = "T"
+	s := sys(0)
+	got := singleStockTrades(Signals(c, ctx), ctx, ctx.Series, s, EquityExecutor{SlippagePct: 0.1}, PercentCost{PerSidePct: 0.2})
+	if len(got) != 2 || got[0].SignalDate != bars[2].Date || got[1].SignalDate != bars[8].Date {
+		t.Fatalf("got %+v, want trades from the signals at bars 2 and 8", got)
+	}
+}
+
 func TestOpenTradeAtEndOfData(t *testing.T) {
 	bars := flatDays(30)
 	bars[29].Close = 120
