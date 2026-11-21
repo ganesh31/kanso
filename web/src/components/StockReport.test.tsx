@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { configureApi, type Report } from "@/api/client";
+import { configureApi, type Report, type Timeframe } from "@/api/client";
 import { StockReport } from "./StockReport";
 
 /** A fake server behind the generated client: the report endpoint answers with `report()`. */
@@ -63,11 +63,16 @@ const tooNew: Report = {
   ],
 };
 
-function renderReport(symbol: string, asOf?: string) {
+function renderReport(
+  symbol: string,
+  asOf?: string,
+  timeframe?: Timeframe,
+  onTimeframeChange: (tf: Timeframe) => void = () => {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <StockReport symbol={symbol} asOf={asOf} />
+      <StockReport symbol={symbol} asOf={asOf} timeframe={timeframe} onTimeframeChange={onTimeframeChange} />
     </QueryClientProvider>,
   );
 }
@@ -132,6 +137,25 @@ describe("StockReport", () => {
     renderReport("DIVISLAB", "2001-01-01");
     expect(await screen.findByText("no data on or before that date")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("chart")).toHaveAttribute("data-bars", "0"));
+  });
+
+  test("weekly timeframe asks for weekly bars and says so", async () => {
+    report.mockReturnValueOnce({ status: 200, body: { ...breakout, timeframe: "weekly" } });
+    renderReport("DIVISLAB", "2024-09-10", "weekly");
+    expect(await screen.findByText(/evaluated on the weekly bar/)).toBeInTheDocument();
+    expect(report).toHaveBeenCalledWith("DIVISLAB", { as_of: "2024-09-10", timeframe: "weekly" });
+    expect(screen.getByRole("button", { name: "Weekly" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Daily" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("timeframe toggle reports the chosen timeframe", async () => {
+    report.mockReturnValueOnce({ status: 200, body: breakout });
+    const onChange = vi.fn();
+    renderReport("DIVISLAB", undefined, undefined, onChange);
+    await screen.findByText("✅");
+    expect(report).toHaveBeenCalledWith("DIVISLAB", {});
+    fireEvent.click(screen.getByRole("button", { name: "Weekly" }));
+    expect(onChange).toHaveBeenCalledWith("weekly");
   });
 
   test("unknown symbol shows the API error", async () => {

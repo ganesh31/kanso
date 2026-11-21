@@ -10,6 +10,18 @@ export function formatPctVs(pct: number, above = "above", below = "below"): stri
   return `${Math.abs(pct).toFixed(2)}% ${pct >= 0 ? above : below}`;
 }
 
+/** "+20.00%" / "−5.00%" (a true minus sign). */
+export function formatSignedPct(pct: number): string {
+  return `${pct < 0 ? "−" : "+"}${Math.abs(pct).toFixed(2)}%`;
+}
+
+const volume = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+
+/** Share volumes, whole shares, Indian digit grouping: "1,23,457". */
+export function formatVolume(n: number): string {
+  return volume.format(n);
+}
+
 function parseDate(d: string): { y: number; m: number; day: number } {
   const [y = 0, m = 0, day = 0] = d.split("-").map(Number);
   return { y, m, day };

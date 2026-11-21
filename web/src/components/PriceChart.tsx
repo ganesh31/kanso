@@ -62,7 +62,10 @@ export function PriceChart({ bars, level }: { bars: Bar[]; level?: number }) {
       axisLabelVisible: true,
       title: "Breakout level",
     });
-    return () => series.removePriceLine(line);
+    // On unmount the chart (and this series) is removed first; a disposed series throws.
+    return () => {
+      if (candles.current === series) series.removePriceLine(line);
+    };
   }, [level]);
 
   return <div ref={el} className="h-[420px] w-full" data-testid="price-chart" />;

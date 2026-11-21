@@ -83,19 +83,21 @@ func Run(ctx context.Context, prov market.Provider, symbol string, asOf market.D
 	return rep, nil
 }
 
-// loadBenchmark loads the benchmark's daily bars up to to, or returns nil
-// when the provider has no benchmark (no gap marking then).
+// loadBenchmark loads the default benchmark's daily bars up to to (the
+// report runs default params, so relative strength uses it). A missing
+// benchmark is not an error: relative strength reports benchmark_missing
+// and every other condition still evaluates.
 func loadBenchmark(ctx context.Context, prov market.Provider, to market.Date) (*market.Series, error) {
-	inst, err := prov.Instrument(ctx, market.Benchmark)
+	inst, err := prov.Instrument(ctx, patterns.DefaultBenchmark)
 	if errors.Is(err, market.ErrNotFound) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("benchmark %s: %w", patterns.DefaultBenchmark, err)
 	}
 	bars, err := prov.Daily(ctx, inst.ID, "", to)
 	if err != nil {
-		return nil, fmt.Errorf("load benchmark: %w", err)
+		return nil, fmt.Errorf("benchmark %s: %w", patterns.DefaultBenchmark, err)
 	}
 	return market.NewDaily(inst, bars), nil
 }

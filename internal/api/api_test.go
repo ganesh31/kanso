@@ -91,7 +91,7 @@ func TestReportReturnsNYearHighLineWithEvidence(t *testing.T) {
 	if got.Symbol != "BREAK" || got.AsOf != string(date(799)) || got.Level != 130 || got.LevelDate != string(date(300)) {
 		t.Fatalf("header = %+v", got)
 	}
-	if len(got.Lines) != 1 {
+	if len(got.Lines) != 5 {
 		t.Fatalf("lines = %+v", got.Lines)
 	}
 	l := got.Lines[0]
@@ -112,6 +112,22 @@ func TestReportWithoutBodyUsesLatestBar(t *testing.T) {
 func TestReportAsOf(t *testing.T) {
 	status, body := do(t, server(t), "POST", "/api/report/BREAK", `{"as_of":"`+string(date(500))+`"}`)
 	if status != 200 || !strings.Contains(string(body), `"as_of":"`+string(date(500))+`"`) {
+		t.Fatalf("status %d: %s", status, body)
+	}
+}
+
+func TestReportWeeklyTimeframe(t *testing.T) {
+	// Bar 799 (Thu) is in a forming week; the last complete week ends at 795.
+	status, body := do(t, server(t), "POST", "/api/report/BREAK", `{"timeframe":"weekly"}`)
+	want := `"as_of":"` + string(date(795)) + `"`
+	if status != 200 || !strings.Contains(string(body), want) || !strings.Contains(string(body), `"timeframe":"weekly"`) {
+		t.Fatalf("status %d: %s", status, body)
+	}
+}
+
+func TestReportUnknownTimeframe400(t *testing.T) {
+	status, body := do(t, server(t), "POST", "/api/report/BREAK", `{"timeframe":"monthly"}`)
+	if status != 400 || !strings.Contains(string(body), "body.timeframe") {
 		t.Fatalf("status %d: %s", status, body)
 	}
 }
@@ -159,8 +175,11 @@ func TestPatternsEndpointListsRegistry(t *testing.T) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Patterns) != 1 || got.Patterns[0].Type != "n_year_high" ||
-		got.Patterns[0].Params[0].Name != "years" || got.Patterns[0].Params[0].Unit != "years" || got.Patterns[0].Params[0].Default != 3.0 {
+	if len(got.Patterns) != 5 {
+		t.Fatalf("patterns = %s", body)
+	}
+	nyh := got.Patterns[1] // sorted by type: level_age, n_year_high, …
+	if nyh.Type != "n_year_high" || nyh.Params[0].Name != "years" || nyh.Params[0].Unit != "years" || nyh.Params[0].Default != 3.0 {
 		t.Fatalf("patterns = %s", body)
 	}
 }
@@ -219,8 +238,12 @@ func TestOpenAPIEvidenceIsDiscriminatedUnion(t *testing.T) {
 		t.Fatalf("Evidence schema = %+v", ev)
 	}
 	want := map[string]string{
-		"n_year_high":   "#/components/schemas/NYearHighEvidence",
-		"not_evaluable": "#/components/schemas/NotEvaluable",
+		"n_year_high":       "#/components/schemas/NYearHighEvidence",
+		"level_age":         "#/components/schemas/LevelAgeEvidence",
+		"not_extended":      "#/components/schemas/NotExtendedEvidence",
+		"relative_strength": "#/components/schemas/RSEvidence",
+		"volume_surge":      "#/components/schemas/VolumeEvidence",
+		"not_evaluable":     "#/components/schemas/NotEvaluable",
 	}
 	if len(ev.OneOf) != len(want) || len(ev.Discriminator.Mapping) != len(want) {
 		t.Fatalf("oneOf = %+v mapping = %+v", ev.OneOf, ev.Discriminator.Mapping)

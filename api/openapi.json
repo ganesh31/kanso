@@ -130,8 +130,12 @@
         "description": "Evidence behind one condition's verdict, discriminated by type.",
         "discriminator": {
           "mapping": {
+            "level_age": "#/components/schemas/LevelAgeEvidence",
             "n_year_high": "#/components/schemas/NYearHighEvidence",
-            "not_evaluable": "#/components/schemas/NotEvaluable"
+            "not_evaluable": "#/components/schemas/NotEvaluable",
+            "not_extended": "#/components/schemas/NotExtendedEvidence",
+            "relative_strength": "#/components/schemas/RSEvidence",
+            "volume_surge": "#/components/schemas/VolumeEvidence"
           },
           "propertyName": "type"
         },
@@ -140,9 +144,45 @@
             "$ref": "#/components/schemas/NYearHighEvidence"
           },
           {
+            "$ref": "#/components/schemas/LevelAgeEvidence"
+          },
+          {
+            "$ref": "#/components/schemas/NotExtendedEvidence"
+          },
+          {
+            "$ref": "#/components/schemas/RSEvidence"
+          },
+          {
+            "$ref": "#/components/schemas/VolumeEvidence"
+          },
+          {
             "$ref": "#/components/schemas/NotEvaluable"
           }
         ]
+      },
+      "LevelAgeEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bars_since": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "level_date": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "level_age"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "bars_since",
+          "level_date"
+        ],
+        "type": "object"
       },
       "Meta": {
         "additionalProperties": false,
@@ -251,6 +291,26 @@
         ],
         "type": "object"
       },
+      "NotExtendedEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "pct_above": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "not_extended"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "pct_above"
+        ],
+        "type": "object"
+      },
       "ParamSpec": {
         "additionalProperties": false,
         "properties": {
@@ -315,6 +375,36 @@
         },
         "required": [
           "patterns"
+        ],
+        "type": "object"
+      },
+      "RSEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bench_return": {
+            "format": "double",
+            "type": "number"
+          },
+          "diff": {
+            "format": "double",
+            "type": "number"
+          },
+          "stock_return": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "relative_strength"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "stock_return",
+          "bench_return",
+          "diff"
         ],
         "type": "object"
       },
@@ -394,8 +484,10 @@
           },
           "timeframe": {
             "default": "daily",
+            "description": "Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars",
             "enum": [
-              "daily"
+              "daily",
+              "weekly"
             ],
             "type": "string"
           }
@@ -419,6 +511,31 @@
           "pass",
           "evaluable",
           "evidence"
+        ],
+        "type": "object"
+      },
+      "VolumeEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_volume": {
+            "format": "double",
+            "type": "number"
+          },
+          "ratio": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "volume_surge"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ratio",
+          "avg_volume"
         ],
         "type": "object"
       }

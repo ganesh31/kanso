@@ -76,6 +76,27 @@ func TestGapsInWindowExcludesOlderGap(t *testing.T) {
 	}
 }
 
+func TestToWeeklyCarriesDailyGaps(t *testing.T) {
+	// 2024-01-01 is a Monday. Bars every day of weeks 1–2 and 4–5; the
+	// whole of week 3 (7 days) is missing, so the gap is recorded at the
+	// first bar of week 4, and the weekly bar of week 4 carries it.
+	cal := calendar(35)
+	s := seriesOn(cal, daysExcept(35, 14, 20)...)
+	s.MarkGaps(cal, 5)
+	w := ToWeekly(s)
+	if len(w.Bars) != 4 {
+		t.Fatalf("weekly bars = %d, want 4", len(w.Bars))
+	}
+	for _, c := range []struct{ from, to, want int }{{0, 3, 1}, {1, 3, 1}, {2, 3, 0}, {0, 1, 0}} {
+		if got := w.GapsIn(c.from, c.to); got != c.want {
+			t.Errorf("weekly GapsIn(%d, %d) = %d, want %d", c.from, c.to, got, c.want)
+		}
+	}
+	if got := ToWeekly(seriesOn(cal, 0, 1)).GapsIn(-1, 0); got != 0 {
+		t.Fatalf("unmarked weekly GapsIn = %d", got)
+	}
+}
+
 func TestGapsInUnmarkedSeriesIsZero(t *testing.T) {
 	s := seriesOn(calendar(3), 0, 2)
 	if got := s.GapsIn(0, 1); got != 0 {
