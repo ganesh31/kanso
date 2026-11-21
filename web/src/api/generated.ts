@@ -76,6 +76,58 @@ export interface NYearHighEvidence {
   type: NYearHighEvidenceType;
 }
 
+export type LevelAgeEvidenceType = typeof LevelAgeEvidenceType[keyof typeof LevelAgeEvidenceType];
+
+
+export const LevelAgeEvidenceType = {
+  level_age: 'level_age',
+} as const;
+
+export interface LevelAgeEvidence {
+  bars_since: number;
+  level_date: string;
+  type: LevelAgeEvidenceType;
+}
+
+export type NotExtendedEvidenceType = typeof NotExtendedEvidenceType[keyof typeof NotExtendedEvidenceType];
+
+
+export const NotExtendedEvidenceType = {
+  not_extended: 'not_extended',
+} as const;
+
+export interface NotExtendedEvidence {
+  pct_above: number;
+  type: NotExtendedEvidenceType;
+}
+
+export type RSEvidenceType = typeof RSEvidenceType[keyof typeof RSEvidenceType];
+
+
+export const RSEvidenceType = {
+  relative_strength: 'relative_strength',
+} as const;
+
+export interface RSEvidence {
+  bench_return: number;
+  diff: number;
+  stock_return: number;
+  type: RSEvidenceType;
+}
+
+export type VolumeEvidenceType = typeof VolumeEvidenceType[keyof typeof VolumeEvidenceType];
+
+
+export const VolumeEvidenceType = {
+  volume_surge: 'volume_surge',
+} as const;
+
+export interface VolumeEvidence {
+  avg_volume: number;
+  ratio: number;
+  type: VolumeEvidenceType;
+}
+
 export type NotEvaluableReason = typeof NotEvaluableReason[keyof typeof NotEvaluableReason];
 
 
@@ -103,7 +155,7 @@ export interface NotEvaluable {
 /**
  * Evidence behind one condition's verdict, discriminated by type.
  */
-export type Evidence = NYearHighEvidence | NotEvaluable;
+export type Evidence = NYearHighEvidence | LevelAgeEvidence | NotExtendedEvidence | RSEvidence | VolumeEvidence | NotEvaluable;
 
 export type ParamSpecKind = typeof ParamSpecKind[keyof typeof ParamSpecKind];
 
