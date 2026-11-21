@@ -159,6 +159,43 @@ func TestNYearHighZeroLevelNotEvaluable(t *testing.T) {
 	}
 }
 
+// markGapBefore moves bars bar… six days later and marks gaps against a
+// calendar of every day, so a 6-day data gap is recorded at bar.
+func markGapBefore(s *market.Series, bar int) *market.Series {
+	for i := bar; i < len(s.Bars); i++ {
+		s.Bars[i].Date = date(i + 6)
+	}
+	cal := make([]market.Date, len(s.Bars)+6)
+	for i := range cal {
+		cal[i] = date(i)
+	}
+	s.MarkGaps(cal, 5)
+	return s
+}
+
+func TestNYearHighDataGapInsideWindow(t *testing.T) {
+	r, _ := evalNYH(t, markGapBefore(oneYearWithHigh(111, 111), 200), Params{"years": 1.0}, 252)
+	want := Result{Evidence: NotEvaluable{Type: TypeNotEvaluable, Reason: ReasonDataGap}}
+	if diff := cmp.Diff(want, r); diff != "" {
+		t.Fatalf("(-want +got):\n%s", diff)
+	}
+}
+
+func TestNYearHighDataGapBeforeWindowIsIgnored(t *testing.T) {
+	highs, closes := flat(300)
+	closes[299] = 101
+	// The window of bar 299 is bars 47…298 plus today; a gap recorded at
+	// bar 47 lies before the window's first bar, one at bar 48 inside it.
+	r, _ := evalNYH(t, markGapBefore(dailySeries(highs, closes), 47), Params{"years": 1.0}, 299)
+	if !r.Evaluable || !r.Pass {
+		t.Fatalf("gap at bar 47: got %+v, want evaluable pass", r)
+	}
+	r, _ = evalNYH(t, markGapBefore(dailySeries(highs, closes), 48), Params{"years": 1.0}, 299)
+	if r.Evaluable || r.Evidence.(NotEvaluable).Reason != ReasonDataGap {
+		t.Fatalf("gap at bar 48: got %+v, want data_gap", r)
+	}
+}
+
 func TestNYearHighMeta(t *testing.T) {
 	m := NYearHigh{}.Meta()
 	if m.Type != "n_year_high" || len(m.Provides) != 1 || m.Provides[0] != BreakoutLevel {

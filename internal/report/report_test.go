@@ -95,6 +95,36 @@ func TestReportBeforeFirstBarIsInsufficientHistory(t *testing.T) {
 	}
 }
 
+// gappyProvider holds the ^NSEI benchmark on every day 0…799 and GAPPY,
+// the BREAK bars with days 700…705 missing (a 6-day data gap).
+func gappyProvider() market.Provider {
+	bench := make([]market.Bar, 800)
+	var gappy []market.Bar
+	for i := range bench {
+		bench[i] = market.Bar{Date: date(i), Open: 1, High: 1, Low: 1, Close: 1, Volume: 1}
+		if i < 700 || i > 705 {
+			gappy = append(gappy, market.Bar{Date: date(i), Open: 99, High: 100, Low: 98, Close: 99, Volume: 1})
+		}
+	}
+	gappy[len(gappy)-1].Close = 131
+	return market.NewMemProvider(
+		[]market.Instrument{{ID: 1, Symbol: "GAPPY", Type: market.Equity}, {ID: 2, Symbol: "^NSEI", Type: market.Index}},
+		map[string][]market.Bar{"GAPPY": gappy, "^NSEI": bench},
+		nil,
+	)
+}
+
+func TestReportDataGapAgainstBenchmarkCalendar(t *testing.T) {
+	r, err := Run(context.Background(), gappyProvider(), "GAPPY", "", market.Daily)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := r.Lines[0].Result
+	if ne, ok := res.Evidence.(patterns.NotEvaluable); res.Evaluable || !ok || ne.Reason != patterns.ReasonDataGap {
+		t.Fatalf("result = %+v, want data_gap", res)
+	}
+}
+
 func TestReportUnknownSymbol(t *testing.T) {
 	_, err := Run(context.Background(), provider(), "NOPE", "", market.Daily)
 	if !errors.Is(err, market.ErrNotFound) {

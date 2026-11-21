@@ -42,12 +42,18 @@ func NewContext(s, bench *market.Series) *Context {
 	return &Context{Series: s, Bench: bench, BenchIdx: idx}
 }
 
+// MaxMissingDays is the most consecutive benchmark trading days an
+// instrument may lack before its bars across them count as a data gap
+// (spec §6.1).
+const MaxMissingDays = 5
+
 // Load is the one loading path for backtest, scan, report and the API. It
 // loads the instrument's daily bars in [from, to] and builds the
-// evaluation context on timeframe tf. benchDaily may be nil.
+// evaluation context on timeframe tf. benchDaily may be nil; when given,
+// its dates are the calendar data gaps are marked against.
 //
-// Only the daily timeframe is supported so far; weekly resampling and
-// benchmark gap marking arrive with their own tickets.
+// Only the daily timeframe is supported so far; weekly resampling arrives
+// with its own ticket.
 func Load(ctx context.Context, prov market.Provider, inst market.Instrument, benchDaily *market.Series,
 	tf market.Timeframe, from, to market.Date,
 ) (pctx *Context, daily *market.Series, err error) {
@@ -59,5 +65,12 @@ func Load(ctx context.Context, prov market.Provider, inst market.Instrument, ben
 		return nil, nil, fmt.Errorf("load %s: %w", inst.Symbol, err)
 	}
 	daily = market.NewDaily(inst, bars)
+	if benchDaily != nil {
+		cal := make([]market.Date, len(benchDaily.Bars))
+		for i, b := range benchDaily.Bars {
+			cal[i] = b.Date
+		}
+		daily.MarkGaps(cal, MaxMissingDays)
+	}
 	return NewContext(daily, benchDaily), daily, nil
 }

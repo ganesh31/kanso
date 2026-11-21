@@ -4,6 +4,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -44,8 +45,11 @@ func Run(ctx context.Context, prov market.Provider, symbol string, asOf market.D
 	if to == "" {
 		to = "9999-12-31"
 	}
-	// No benchmark yet: no V1 pattern in the registry needs one so far.
-	pctx, _, err := patterns.Load(ctx, prov, inst, nil, tf, "", to)
+	bench, err := loadBenchmark(ctx, prov, to)
+	if err != nil {
+		return nil, err
+	}
+	pctx, _, err := patterns.Load(ctx, prov, inst, bench, tf, "", to)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +81,23 @@ func Run(ctx context.Context, prov market.Provider, symbol string, asOf market.D
 		rep.Level, rep.LevelDate = &level, &levelDate
 	}
 	return rep, nil
+}
+
+// loadBenchmark loads the benchmark's daily bars up to to, or returns nil
+// when the provider has no benchmark (no gap marking then).
+func loadBenchmark(ctx context.Context, prov market.Provider, to market.Date) (*market.Series, error) {
+	inst, err := prov.Instrument(ctx, market.Benchmark)
+	if errors.Is(err, market.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	bars, err := prov.Daily(ctx, inst.ID, "", to)
+	if err != nil {
+		return nil, fmt.Errorf("load benchmark: %w", err)
+	}
+	return market.NewDaily(inst, bars), nil
 }
 
 // reportOrder puts context providers (n_year_high, which provides the

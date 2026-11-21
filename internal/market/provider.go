@@ -5,6 +5,10 @@ import (
 	"errors"
 )
 
+// Benchmark is the symbol of the benchmark index (Nifty 50). Its trading
+// dates are the calendar data gaps are measured against.
+const Benchmark = "^NSEI"
+
 // ErrNotFound is returned (wrapped) when a symbol, instrument or universe
 // does not exist.
 var ErrNotFound = errors.New("not found")
