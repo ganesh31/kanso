@@ -23,7 +23,8 @@ export function EquityChart({ equity, benchmark }: { equity: EquityPoint[]; benc
         textColor: "#a3a3a3",
       },
       grid: { vertLines: { color: "#262626" }, horzLines: { color: "#262626" } },
-      timeScale: { borderColor: "#404040" },
+      // Twenty years of daily closes must fit: the default 0.5px minimum bar spacing would crop them.
+      timeScale: { borderColor: "#404040", minBarSpacing: 0.01 },
       rightPriceScale: { borderColor: "#404040" },
       localization: { priceFormatter: (v: number) => `₹${Math.round(v).toLocaleString("en-IN")}` },
     });
