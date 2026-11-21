@@ -116,6 +116,22 @@ func TestReportAsOf(t *testing.T) {
 	}
 }
 
+func TestReportWeeklyTimeframe(t *testing.T) {
+	// Bar 799 (Thu) is in a forming week; the last complete week ends at 795.
+	status, body := do(t, server(t), "POST", "/api/report/BREAK", `{"timeframe":"weekly"}`)
+	want := `"as_of":"` + string(date(795)) + `"`
+	if status != 200 || !strings.Contains(string(body), want) || !strings.Contains(string(body), `"timeframe":"weekly"`) {
+		t.Fatalf("status %d: %s", status, body)
+	}
+}
+
+func TestReportUnknownTimeframe400(t *testing.T) {
+	status, body := do(t, server(t), "POST", "/api/report/BREAK", `{"timeframe":"monthly"}`)
+	if status != 400 || !strings.Contains(string(body), "body.timeframe") {
+		t.Fatalf("status %d: %s", status, body)
+	}
+}
+
 func TestReportBadAsOf400WithField(t *testing.T) {
 	status, body := do(t, server(t), "POST", "/api/report/BREAK", `{"as_of":"2024-13-45"}`)
 	if status != 400 {

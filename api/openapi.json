@@ -394,8 +394,10 @@
           },
           "timeframe": {
             "default": "daily",
+            "description": "Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars",
             "enum": [
-              "daily"
+              "daily",
+              "weekly"
             ],
             "type": "string"
           }

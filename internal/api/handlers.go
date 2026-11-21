@@ -57,8 +57,8 @@ type ReportRequest struct {
 	// AsOf evaluates the last bar on or before this date; empty means the
 	// latest bar.
 	AsOf market.Date `json:"as_of,omitempty" format:"date" doc:"Evaluate the last bar on or before this date (default: latest)"`
-	// Timeframe of the bars; only daily so far.
-	Timeframe market.Timeframe `json:"timeframe,omitempty" enum:"daily" default:"daily"`
+	// Timeframe of the bars every condition evaluates on.
+	Timeframe market.Timeframe `json:"timeframe,omitempty" enum:"daily,weekly" default:"daily" doc:"Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars"`
 }
 
 // ReportInput is the stock report request.

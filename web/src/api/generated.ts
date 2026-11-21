@@ -183,16 +183,21 @@ export interface Report {
   timeframe: ReportTimeframe;
 }
 
+/**
+ * Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars
+ */
 export type ReportRequestTimeframe = typeof ReportRequestTimeframe[keyof typeof ReportRequestTimeframe];
 
 
 export const ReportRequestTimeframe = {
   daily: 'daily',
+  weekly: 'weekly',
 } as const;
 
 export interface ReportRequest {
   /** Evaluate the last bar on or before this date (default: latest) */
   as_of?: string;
+  /** Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars */
   timeframe?: ReportRequestTimeframe;
 }
 
