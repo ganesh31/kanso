@@ -39,8 +39,11 @@ type Trade struct {
 	// HoldingDays is the number of trading days from entry to exit.
 	HoldingDays int
 	// RankKey orders crowded entry days: the 6-month RS diff at the signal
-	// (spec §5.6). Set by Run, not by TradePath.
-	RankKey float64
+	// (spec §5.6), or -Inf when not evaluable. Set by Run, not by
+	// TradePath. It is not serialized: JSON has no -Inf.
+	RankKey float64 `json:"-"`
+	// Quantity is the whole shares the portfolio bought; 0 outside it.
+	Quantity int64
 }
 
 // TradePath follows one signal at bar sig of ctx.Series through its daily
