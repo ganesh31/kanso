@@ -69,16 +69,27 @@ const empty: ScanResult = { as_of: "2024-09-10", matches: [], stale: [], skipped
 const quickscan = vi.fn<(body: unknown) => ScanResult>();
 
 /** Holds the search params in state, as the router would. */
-function Harness({ initial = {}, onOpen = () => {} }: { initial?: ScannerSearch; onOpen?: (s: string) => void }) {
+/** The fake server records created systems' bodies. */
+const createSystem = vi.fn<(body: unknown) => void>();
+
+function Harness({
+  initial = {},
+  onOpen = () => {},
+  onSaved = () => {},
+}: {
+  initial?: ScannerSearch;
+  onOpen?: (s: string) => void;
+  onSaved?: (id: string) => void;
+}) {
   const [search, setSearch] = useState<ScannerSearch>(initial);
-  return <QuickScan search={search} onSearchChange={setSearch} onOpenReport={onOpen} />;
+  return <QuickScan search={search} onSearchChange={setSearch} onOpenReport={onOpen} onSaved={onSaved} />;
 }
 
-function renderQuickScan(initial?: ScannerSearch, onOpen?: (s: string) => void) {
+function renderQuickScan(initial?: ScannerSearch, onOpen?: (s: string) => void, onSaved?: (id: string) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <Harness initial={initial} onOpen={onOpen} />
+      <Harness initial={initial} onOpen={onOpen} onSaved={onSaved} />
     </QueryClientProvider>,
   );
 }
@@ -86,6 +97,7 @@ function renderQuickScan(initial?: ScannerSearch, onOpen?: (s: string) => void) 
 describe("QuickScan", () => {
   beforeEach(() => {
     quickscan.mockReset();
+    createSystem.mockReset();
     quickscan.mockReturnValue(empty);
     configureApi({
       baseUrl: "http://test",
@@ -96,6 +108,12 @@ describe("QuickScan", () => {
         if (path === "/api/universes") {
           return json(200, { universes: [{ name: "NIFTY50", members: 50, has_history: false }] });
         }
+        if (path === "/api/systems" && req.method === "POST") {
+          const body = (await req.json()) as object;
+          createSystem(body);
+          return json(201, { ...body, id: "new-id" });
+        }
+        if (path === "/api/systems") return json(200, { systems: [] });
         if (path === "/api/quickscan") {
           const body = (await req.json()) as { pattern: string };
           if (body.pattern === "nope") {
@@ -176,5 +194,29 @@ describe("QuickScan", () => {
   test("validation errors are shown with their field", async () => {
     renderQuickScan({ pattern: "nope", universe: "NIFTY50" });
     expect(await screen.findByRole("alert")).toHaveTextContent('pattern: unknown pattern "nope"');
+  });
+
+  test("save as system stores the scan as a system, auto-inserted condition first", async () => {
+    quickscan.mockReturnValue({ ...empty, auto_inserted: ["n_year_high"] });
+    const onSaved = vi.fn();
+    renderQuickScan(
+      { pattern: "not_extended", params: { pct: 5 }, universe: "NIFTY50", tf: "weekly" },
+      undefined,
+      onSaved,
+    );
+    fireEvent.change(await screen.findByLabelText("System name"), { target: { value: "Tight breakout" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as system" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith("new-id"));
+    expect(createSystem).toHaveBeenCalledWith({
+      name: "Tight breakout",
+      universe: "NIFTY50",
+      timeframe: "weekly",
+      entry: { all: [{ type: "n_year_high" }, { type: "not_extended", params: { pct: 5 } }] },
+    });
+  });
+
+  test("save as system needs a name", async () => {
+    renderQuickScan({ pattern: "volume_surge", universe: "NIFTY50" });
+    expect(await screen.findByRole("button", { name: "Save as system" })).toBeDisabled();
   });
 });

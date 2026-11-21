@@ -6,12 +6,14 @@ export type ParamValue = number | boolean | string;
 export type ParamValues = Record<string, ParamValue>;
 
 /**
- * The Scanner's search params, so a scan URL can be shared: the Quick Scan request (pattern, params,
- * universe, timeframe `tf`), the `mode` and the table `sort` ("pct_above", "-pct_above" for descending).
+ * The Scanner's search params, so a scan URL can be shared: the `tab` ("saved" or "quick"), the saved
+ * `system` id, the Quick Scan request (pattern, params, universe, timeframe `tf`), the `mode` and the
+ * table `sort` ("pct_above", "-pct_above" for descending).
  * Bad values are dropped rather than failing the page.
  */
 export const scannerSearchSchema = z.object({
-  tab: z.enum(["quick"]).optional().catch(undefined),
+  tab: z.enum(["saved", "quick"]).optional().catch(undefined),
+  system: z.string().optional().catch(undefined),
   pattern: z.string().optional().catch(undefined),
   params: z
     .record(z.string(), z.union([z.number(), z.boolean(), z.string()]))

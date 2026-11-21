@@ -1,9 +1,9 @@
 import { useState } from "react";
 import {
-  ApiError,
+  type Condition,
   type Meta,
   type QuickscanRequest,
-  type QuickscanRequestMode,
+  type System,
   type Timeframe,
   useListPatterns,
   useListUniverses,
@@ -11,15 +11,12 @@ import {
 } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { ParamValues, ScannerSearch } from "@/lib/scannerSearch";
-import { MatchTable } from "./MatchTable";
+import { useSystems } from "@/state/systems";
 import { ParamEditor, withDefaults } from "./ParamEditor";
 import { PatternPicker, selectClass } from "./PatternPicker";
-
-const modes: { value: QuickscanRequestMode; label: string }[] = [
-  { value: "fresh", label: "Fresh signals" },
-  { value: "all", label: "All qualifying" },
-];
+import { ModeToggle, ScanError, ScanResults } from "./ScanResults";
 
 const timeframes: { value: Timeframe; label: string }[] = [
   { value: "daily", label: "Daily" },
@@ -39,6 +36,66 @@ function requestOf(search: ScannerSearch): QuickscanRequest | undefined {
   return req;
 }
 
+/**
+ * The system a quick scan stands for: its stock list and timeframe, and an entry rule of the
+ * auto-inserted conditions (default params) followed by the pattern.
+ */
+export function systemOf(name: string, request: QuickscanRequest, autoInserted: string[]): System {
+  const pattern: Condition = { type: request.pattern };
+  if (request.params) pattern.params = request.params;
+  return {
+    name,
+    universe: request.universe,
+    timeframe: request.timeframe ?? "daily",
+    entry: { all: [...autoInserted.map((type) => ({ type })), pattern] },
+  };
+}
+
+/** Saves the scanned rule as a system, so it can be picked on the Saved system tab. */
+function SaveAsSystem({
+  request,
+  autoInserted,
+  onSaved,
+}: {
+  request: QuickscanRequest;
+  autoInserted: string[];
+  onSaved: (id: string) => void;
+}) {
+  const { save } = useSystems();
+  const [name, setName] = useState("");
+  const [state, setState] = useState<{ saving: boolean; error?: Error }>({ saving: false });
+  const submit = async () => {
+    setState({ saving: true });
+    try {
+      const saved = await save(systemOf(name.trim(), request, autoInserted));
+      setState({ saving: false });
+      if (saved.id) onSaved(saved.id);
+    } catch (error) {
+      setState({ saving: false, error: error as Error });
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <label className="flex flex-col gap-1 text-sm">
+          <span>System name</span>
+          <Input aria-label="System name" value={name} onChange={(e) => setName(e.target.value)} className="w-56" />
+        </label>
+        <Button type="submit" variant="outline" disabled={name.trim() === "" || state.saving}>
+          Save as system
+        </Button>
+      </form>
+      {state.error ? <ScanError error={state.error} /> : null}
+    </div>
+  );
+}
+
 /** "3 years": a pattern's defining default, for the auto-insert notice. */
 function describeDefaults(meta: Meta): string {
   const p = meta.params.find((s) => s.kind === "number");
@@ -55,10 +112,13 @@ export function QuickScan({
   search,
   onSearchChange,
   onOpenReport,
+  onSaved,
 }: {
   search: ScannerSearch;
   onSearchChange: (next: ScannerSearch) => void;
   onOpenReport: (symbol: string) => void;
+  /** Called with the new system's id after "Save as system". */
+  onSaved: (id: string) => void;
 }) {
   const patternsQ = useListPatterns({ query: { select: (b) => b.patterns } });
   const universesQ = useListUniverses({ query: { select: (b) => b.universes } });
@@ -138,54 +198,21 @@ export function QuickScan({
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Mode">
-        {modes.map((m) => (
-          <Button
-            key={m.value}
-            type="button"
-            size="sm"
-            variant={mode === m.value ? "default" : "outline"}
-            aria-pressed={mode === m.value}
-            onClick={() => onSearchChange({ ...search, mode: m.value === "fresh" ? undefined : m.value })}
-          >
-            {m.label}
-          </Button>
-        ))}
-        <span className="text-muted-foreground text-xs">
-          {mode === "fresh"
-            ? "Stocks whose rule turned true in the last 5 daily / 1 weekly bars."
-            : "Every stock the rule is true for now."}
-        </span>
-      </div>
+      <ModeToggle mode={mode} onChange={(m) => onSearchChange({ ...search, mode: m === "fresh" ? undefined : m })} />
 
       {request === undefined ? (
         <p className="text-muted-foreground">Pick a pattern and a stock list, then Scan.</p>
       ) : scan.isPending ? (
         <p className="text-muted-foreground">Scanning {request.universe}…</p>
       ) : scan.isError ? (
-        <div role="alert" className="text-destructive">
-          <p>{scan.error.message}</p>
-          {scan.error instanceof ApiError && scan.error.fields.length > 0 ? (
-            <ul className="list-disc pl-5 text-sm">
-              {scan.error.fields.map((f) => (
-                <li key={f.path}>
-                  {f.path}: {f.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
+        <ScanError error={scan.error} />
       ) : (
-        <section className="flex flex-col gap-3">
-          <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h2 className="text-lg font-semibold">
-              {scan.data.matches.length} {scan.data.matches.length === 1 ? "match" : "matches"}
-            </h2>
-            <span className="text-muted-foreground text-sm">{`as of ${scan.data.as_of}`}</span>
-            <span className="text-muted-foreground text-sm">
-              {`${scan.data.stale.length} stale, ${scan.data.skipped.length} skipped`}
-            </span>
-          </header>
+        <ScanResults
+          result={scan.data}
+          sort={search.sort}
+          onSortChange={(sort) => onSearchChange({ ...search, sort })}
+          onOpen={onOpenReport}
+        >
           {scan.data.auto_inserted.map((type) => {
             const inserted = patterns.find((p) => p.type === type);
             const asked = patterns.find((p) => p.type === request.pattern);
@@ -196,17 +223,8 @@ export function QuickScan({
               </p>
             );
           })}
-          {scan.data.matches.length > 0 ? (
-            <MatchTable
-              matches={scan.data.matches}
-              sort={search.sort}
-              onSortChange={(sort) => onSearchChange({ ...search, sort })}
-              onOpen={onOpenReport}
-            />
-          ) : (
-            <p className="text-muted-foreground">No stock qualifies.</p>
-          )}
-        </section>
+          <SaveAsSystem request={request} autoInserted={scan.data.auto_inserted} onSaved={onSaved} />
+        </ScanResults>
       )}
     </div>
   );
