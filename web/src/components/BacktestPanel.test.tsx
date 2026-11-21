@@ -4,6 +4,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 import { configureApi, type BacktestResult, type System } from "@/api/client";
 import { BacktestPanel } from "./BacktestPanel";
 
+vi.mock("./EquityChart", () => ({
+  EquityChart: ({ equity, benchmark }: { equity: unknown[]; benchmark: unknown[] }) => (
+    <div data-testid="equity-chart">
+      {equity.length} vs {benchmark.length}
+    </div>
+  ),
+}));
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -68,8 +76,27 @@ const result: BacktestResult = {
     adjustment: "split-adjusted, not dividend-adjusted",
     data_start: "2007-09-17",
     data_end: "2026-11-20",
+    ranking_rule: "crowded days ranked by 6-month RS, then symbol",
     skipped: [],
+    skipped_signals: [{ symbol: "MRF", entry_date: "2024-03-04", reason: "price_above_slot" }],
   },
+  portfolio_trades: [],
+  portfolio: {
+    cagr: 0.142,
+    max_drawdown: -0.321,
+    final_equity: 2534000.5,
+    exposure: 0.62,
+    bench_cagr: 0.113,
+    bench_max_drawdown: -0.38,
+  },
+  equity: [
+    { date: "2007-09-17", value: 1000000 },
+    { date: "2026-11-20", value: 2534000.5 },
+  ],
+  benchmark: [
+    { date: "2007-09-17", value: 1000000 },
+    { date: "2026-11-20", value: 2100000 },
+  ],
 };
 
 const backtest = vi.fn<(body: unknown) => Response>();
@@ -116,6 +143,28 @@ describe("BacktestPanel", () => {
     expect(within(tiles).getByText("Expectancy").nextSibling).toHaveTextContent("+0.96%");
     expect(within(tiles).getByText("Median hold").nextSibling).toHaveTextContent("36 days");
     expect(screen.getByText(/next-day open/)).toBeInTheDocument();
+  });
+
+  test("CAGR and max drawdown tiles each show the Nifty comparison", async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    const tiles = await screen.findByRole("region", { name: "Portfolio stats" });
+    const cagr = within(tiles).getByRole("group", { name: "CAGR" });
+    expect(cagr).toHaveTextContent("+14.20%");
+    expect(cagr).toHaveTextContent("Nifty +11.30%");
+    const mdd = within(tiles).getByRole("group", { name: "Max drawdown" });
+    expect(mdd).toHaveTextContent("−32.10%");
+    expect(mdd).toHaveTextContent("Nifty −38.00%");
+    expect(within(tiles).getByRole("group", { name: "Final equity" })).toHaveTextContent("₹25,34,000.50");
+    expect(within(tiles).getByRole("group", { name: "Exposure" })).toHaveTextContent("62.0%");
+    expect(screen.getByTestId("equity-chart")).toHaveTextContent("2 vs 2");
+  });
+
+  test("lists the ranking rule and skipped signals", async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    expect(await screen.findByText(/crowded days ranked by 6-month RS, then symbol/)).toBeInTheDocument();
+    expect(screen.getByText(/1 signal skipped: price above slot size \(MRF 2024-03-04\)/)).toBeInTheDocument();
   });
 
   test("lists every trade with its exit reason", async () => {
