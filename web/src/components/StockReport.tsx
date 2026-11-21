@@ -6,7 +6,8 @@ import { PriceChart } from "./PriceChart";
 
 export function StockReport({ symbol, asOf }: { symbol: string; asOf?: string }) {
   const report = useStockReport(symbol, asOf ? { as_of: asOf } : {});
-  const bars = useGetBars(symbol, undefined, { query: { select: (body) => body.bars } });
+  // Cut the chart at as_of (inclusive) so it never shows candles from after the report date.
+  const bars = useGetBars(symbol, asOf ? { to: asOf } : undefined, { query: { select: (body) => body.bars } });
 
   if (report.isPending) {
     return <p className="text-muted-foreground">Loading {symbol}…</p>;

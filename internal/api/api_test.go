@@ -259,7 +259,30 @@ func TestSPAFallbackServesIndex(t *testing.T) {
 	if status, body := do(t, srv, "GET", "/assets/app.js", ""); status != 200 || string(body) != "console.log(1)" {
 		t.Fatalf("asset: %d %s", status, body)
 	}
-	if status, _ := do(t, srv, "GET", "/api/nope", ""); status != 404 {
-		t.Fatalf("unknown API route should 404, got %d", status)
+}
+
+func TestUnknownAPIRouteIsProblemJSON(t *testing.T) {
+	srv := server(t)
+	res, err := http.Get(srv.URL + "/api/nope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 404 {
+		t.Fatalf("status %d, want 404", res.StatusCode)
+	}
+	if ct := res.Header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("Content-Type %q, want application/problem+json", ct)
+	}
+	var got struct {
+		Title  string `json:"title"`
+		Status int    `json:"status"`
+		Detail string `json:"detail"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != 404 || got.Title != "Not Found" || !strings.Contains(got.Detail, "/api/nope") {
+		t.Fatalf("body %+v", got)
 	}
 }

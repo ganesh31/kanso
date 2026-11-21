@@ -81,7 +81,11 @@ func OpenAPIJSON() ([]byte, error) {
 // not under /api/ so client-side routes work on reload.
 func spa(static fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if static == nil || strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			notFoundProblem(w, r)
+			return
+		}
+		if static == nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -103,6 +107,18 @@ func spa(static fs.FS) http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(index)
+	})
+}
+
+// notFoundProblem answers an unknown API route with the same RFC 9457
+// problem JSON that huma uses for every other API error.
+func notFoundProblem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(http.StatusNotFound)
+	_ = json.NewEncoder(w).Encode(huma.ErrorModel{
+		Title:  http.StatusText(http.StatusNotFound),
+		Status: http.StatusNotFound,
+		Detail: "no API route for " + r.Method + " " + r.URL.Path,
 	})
 }
 

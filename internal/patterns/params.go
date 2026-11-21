@@ -78,7 +78,13 @@ func Normalize(m Meta, p Params) (Params, error) {
 	for _, s := range m.Params {
 		v, ok := p[s.Name]
 		if !ok {
-			out[s.Name] = s.Default
+			// Defaults go through the same checks, so a bad spec fails loudly
+			// and every value comes out with its normalised type.
+			nv, err := checkParam(s, s.Default)
+			if err != nil {
+				return nil, fmt.Errorf("%s: default for param %q %w", m.Type, s.Name, err)
+			}
+			out[s.Name] = nv
 			continue
 		}
 		nv, err := checkParam(s, v)

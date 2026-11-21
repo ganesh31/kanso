@@ -85,3 +85,21 @@ func TestNormalizeAcceptsStepMultiples(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNormalizeNormalisesDefaults(t *testing.T) {
+	m := Meta{Type: "t", Params: []ParamSpec{{Name: "years", Kind: KindNumber, Default: 3, Min: 1, Max: 20, Step: 1}}}
+	got, err := Normalize(m, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := got["years"].(float64); !ok || v != 3 {
+		t.Fatalf("years = %#v, want float64 3", got["years"])
+	}
+}
+
+func TestNormalizeRejectsInvalidDefault(t *testing.T) {
+	m := Meta{Type: "t", Params: []ParamSpec{{Name: "years", Kind: KindNumber, Default: 50.0, Min: 1, Max: 20}}}
+	if _, err := Normalize(m, nil); err == nil || !strings.Contains(err.Error(), "default") {
+		t.Fatalf("err = %v, want an error about the default", err)
+	}
+}

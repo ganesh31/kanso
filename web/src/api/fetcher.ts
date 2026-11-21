@@ -54,9 +54,17 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const doFetch = config.fetch ?? fetch;
   const res = await doFetch(new Request(base + url, init));
   const text = await res.text();
-  const body: unknown = text ? JSON.parse(text) : undefined;
-  if (!res.ok) throw toApiError(res.status, body);
-  return body as T;
+  if (!res.ok) throw toApiError(res.status, parseOrUndefined(text));
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** Error bodies may be plain text (a proxy's 502), so a parse failure just means "no problem JSON". */
+function parseOrUndefined(text: string): unknown {
+  try {
+    return text ? JSON.parse(text) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** orval types every generated hook's error with this, so `error` is always an ApiError. */

@@ -36,6 +36,9 @@ func TestReadCSVRejectsBadRows(t *testing.T) {
 		"missing column": "symbol,date,open,high,low,close\nTCS,2024-01-01,1,2,0.5,1.5\n",
 		"bad number":     "symbol,date,open,high,low,close,volume\nTCS,2024-01-01,x,2,0.5,1.5,100\n",
 		"bad date":       "symbol,date,open,high,low,close,volume\nTCS,01/01/2024,1,2,0.5,1.5,100\n",
+		"NaN price":      "symbol,date,open,high,low,close,volume\nTCS,2024-01-01,1,2,0.5,NaN,100\n",
+		"Inf volume":     "symbol,date,open,high,low,close,volume\nTCS,2024-01-01,1,2,0.5,1.5,+Inf\n",
+		"duplicate date": "symbol,date,open,high,low,close,volume\nTCS,2024-01-01,1,2,0.5,1.5,100\nTCS,2024-01-01,1,2,0.5,1.6,100\n",
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -53,5 +56,16 @@ func TestDateTime(t *testing.T) {
 	}
 	if !d.Valid() || Date("2024-13-01").Valid() {
 		t.Fatal("Valid() wrong")
+	}
+}
+
+func TestReadCSVAllowsSymbolsToShareADate(t *testing.T) {
+	in := "symbol,date,open,high,low,close,volume\nTCS,2024-01-01,1,2,0.5,1.5,100\nINFY,2024-01-01,1,2,0.5,1.5,100\n"
+	got, err := ReadCSV(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got["TCS"]) != 1 || len(got["INFY"]) != 1 {
+		t.Fatalf("got %v", got)
 	}
 }

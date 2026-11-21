@@ -47,6 +47,16 @@ describe("api client", () => {
     });
   });
 
+  test("a plain-text 502 becomes ApiError with the HTTP fallback message", async () => {
+    serve(() => new Response("Bad Gateway", { status: 502, headers: { "Content-Type": "text/plain" } }));
+    await expect(stockReport("TCS")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 502,
+      message: "HTTP 502",
+      fields: [],
+    });
+  });
+
   test("report posts the options and returns the body", async () => {
     let seen: Request | undefined;
     serve((req) => {

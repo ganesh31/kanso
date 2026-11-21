@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 )
@@ -31,6 +32,11 @@ func ReadCSV(r io.Reader) (map[string][]Bar, error) {
 		}
 	}
 
+	type key struct {
+		sym  string
+		date Date
+	}
+	seen := map[key]int{} // (symbol, date) → line it first appeared on
 	out := map[string][]Bar{}
 	line := 1
 	for {
@@ -49,12 +55,16 @@ func ReadCSV(r io.Reader) (map[string][]Bar, error) {
 		var nums [5]float64
 		for i, c := range csvColumns[2:] {
 			v, err := strconv.ParseFloat(rec[col[c]], 64)
-			if err != nil {
+			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
 				return nil, fmt.Errorf("csv line %d: bad %s %q", line, c, rec[col[c]])
 			}
 			nums[i] = v
 		}
 		sym := rec[col["symbol"]]
+		if first, dup := seen[key{sym, d}]; dup {
+			return nil, fmt.Errorf("csv line %d: duplicate %s %s (first on line %d)", line, sym, d, first)
+		}
+		seen[key{sym, d}] = line
 		out[sym] = append(out[sym], Bar{
 			Date: d, Open: nums[0], High: nums[1], Low: nums[2], Close: nums[3], Volume: nums[4],
 		})

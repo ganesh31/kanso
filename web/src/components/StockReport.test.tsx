@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { configureApi, type Report } from "@/api/client";
 import { StockReport } from "./StockReport";
@@ -72,6 +72,11 @@ function renderReport(symbol: string, asOf?: string) {
   );
 }
 
+const allBars = [
+  { date: "2024-09-10", open: 1, high: 1, low: 1, close: 1, volume: 1 },
+  { date: "2024-09-11", open: 1, high: 1, low: 1, close: 1, volume: 1 },
+];
+
 describe("StockReport", () => {
   beforeEach(() => {
     report.mockReset();
@@ -81,10 +86,9 @@ describe("StockReport", () => {
         const req = input as Request;
         const path = new URL(req.url).pathname;
         if (path.startsWith("/api/bars/")) {
-          return json(200, {
-            symbol: "X",
-            bars: [{ date: "2024-09-10", open: 1, high: 1, low: 1, close: 1, volume: 1 }],
-          });
+          // Like the server: `to` is an inclusive cutoff.
+          const to = new URL(req.url).searchParams.get("to") ?? "9999-12-31";
+          return json(200, { symbol: "X", bars: allBars.filter((b) => b.date <= to) });
         }
         const symbol = decodeURIComponent(path.replace("/api/report/", ""));
         const res = report(symbol, await req.json());
@@ -119,7 +123,15 @@ describe("StockReport", () => {
     expect(report).toHaveBeenCalledWith("DIVISLAB", { as_of: "2024-09-10" });
     const chart = await screen.findByTestId("chart");
     expect(chart).toHaveAttribute("data-level", "4105.2");
-    expect(chart).toHaveAttribute("data-bars", "1");
+    // The 2024-09-11 candle is after as_of, so it must not be charted.
+    await waitFor(() => expect(chart).toHaveAttribute("data-bars", "1"));
+  });
+
+  test("chart is empty when no bar exists on or before as_of", async () => {
+    report.mockReturnValueOnce({ status: 200, body: { ...breakout, as_of: "" } });
+    renderReport("DIVISLAB", "2001-01-01");
+    expect(await screen.findByText("no data on or before that date")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("chart")).toHaveAttribute("data-bars", "0"));
   });
 
   test("unknown symbol shows the API error", async () => {
