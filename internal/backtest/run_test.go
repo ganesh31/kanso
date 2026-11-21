@@ -1,7 +1,9 @@
 package backtest
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"math/rand/v2"
 	"testing"
@@ -113,6 +115,86 @@ func TestRunTradesAreHonest(t *testing.T) {
 		if i > 0 && tr.EntryDate < res.AllTrades[i-1].ExitDate {
 			t.Fatalf("trade %d entered %s while the previous trade was open until %s", i, tr.EntryDate, res.AllTrades[i-1].ExitDate)
 		}
+	}
+}
+
+// breakoutBars are 800 days that make a new 3-year high on bar 795 and
+// hold it to the end. The close 126 bars (6 months) before it is base, so
+// a lower base means a stronger 6-month return.
+func breakoutBars(base float64) []market.Bar {
+	bars := make([]market.Bar, 800)
+	for i := range bars {
+		bars[i] = market.Bar{Open: 99, High: 100, Low: 98, Close: 99, Volume: 1}
+	}
+	bars[300].High = 130
+	bars[669] = market.Bar{Open: base, High: base, Low: base, Close: base, Volume: 1}
+	for i := 795; i < 800; i++ {
+		bars[i] = market.Bar{Open: 131, High: 132, Low: 130, Close: 131, Volume: 1}
+	}
+	return datedFrom("2020-01-01", bars)
+}
+
+func TestRankKeyIgnoresRule(t *testing.T) {
+	flat := breakoutBars(99)
+	bench := make([]market.Bar, len(flat))
+	for i, b := range flat {
+		bench[i] = market.Bar{Date: b.Date, Open: 100, High: 100, Low: 100, Close: 100}
+	}
+	prov := market.NewMemProvider([]market.Instrument{
+		{ID: 1, Symbol: "AAA", Type: market.Equity},
+		{ID: 2, Symbol: "ZZZ", Type: market.Equity},
+		{ID: 3, Symbol: market.Benchmark, Type: market.Index},
+	}, map[string][]market.Bar{"AAA": flat, "ZZZ": breakoutBars(60), market.Benchmark: bench},
+		map[string][]string{"TEST": {"AAA", "ZZZ"}})
+	s := rules.System{Name: "no rs", Universe: "TEST", Entry: rules.Entry{All: []rules.Condition{{Type: "n_year_high"}}},
+		Portfolio: rules.Portfolio{MaxPositions: 1}}
+	res, err := Run(context.Background(), prov, s, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.AllTrades) != 2 || res.AllTrades[0].EntryDate != res.AllTrades[1].EntryDate {
+		t.Fatalf("want AAA and ZZZ entering the same day, got %+v", res.AllTrades)
+	}
+	if len(res.Taken) != 1 || res.Taken[0].Symbol != "ZZZ" {
+		t.Fatalf("taken %+v, want ZZZ: its 6-month RS beats AAA's, though RS is not in the rule", res.Taken)
+	}
+}
+
+func TestRunPortfolioAndBenchmark(t *testing.T) {
+	res, err := Run(context.Background(), runProvider("2015-01-05"), testSystem(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Honesty.RankingRule != "crowded days ranked by 6-month RS, then symbol" {
+		t.Fatalf("RankingRule = %q", res.Honesty.RankingRule)
+	}
+	if len(res.Taken) == 0 || len(res.Equity) == 0 || len(res.Equity) != len(res.Benchmark) {
+		t.Fatalf("taken %d, equity %d, benchmark %d points", len(res.Taken), len(res.Equity), len(res.Benchmark))
+	}
+	if res.Equity[0].Date != res.Honesty.DataStart || res.Equity[0].Value != 1_000_000 || res.Benchmark[0].Value != 1_000_000 {
+		t.Fatalf("curves start %+v / %+v, want 1,000,000 on %s", res.Equity[0], res.Benchmark[0], res.Honesty.DataStart)
+	}
+	p := res.Portfolio
+	if p.FinalEquity != res.Equity[len(res.Equity)-1].Value || p.CAGR != CAGR(res.Equity) ||
+		p.MaxDrawdown != MaxDrawdown(res.Equity) || p.BenchCAGR != CAGR(res.Benchmark) ||
+		p.BenchMaxDrawdown != MaxDrawdown(res.Benchmark) || p.Exposure <= 0 || p.Exposure > 1 {
+		t.Fatalf("portfolio stats %+v don't match the curves", p)
+	}
+}
+
+func TestRunDeterministic(t *testing.T) {
+	var out [2][]byte
+	for i := range out {
+		res, err := Run(context.Background(), runProvider("2015-01-05"), testSystem(), "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out[i], err = json.Marshal(res); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !bytes.Equal(out[0], out[1]) {
+		t.Fatal("two runs on the same data gave different JSON")
 	}
 }
 

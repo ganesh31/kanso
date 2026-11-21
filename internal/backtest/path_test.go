@@ -246,7 +246,7 @@ func TestSingleStockSkipsSignalsWhileTradeOpen(t *testing.T) {
 	ctx.Series.Bars = bars
 	ctx.Series.Instrument.Symbol = "T"
 	s := sys(0)
-	got := singleStockTrades(Signals(c, ctx), ctx, ctx.Series, s, EquityExecutor{SlippagePct: 0.1}, PercentCost{PerSidePct: 0.2})
+	got := singleStock(candidates(Signals(c, ctx), ctx, ctx.Series, s, EquityExecutor{SlippagePct: 0.1}, PercentCost{PerSidePct: 0.2}))
 	if len(got) != 2 || got[0].SignalDate != bars[2].Date || got[1].SignalDate != bars[8].Date {
 		t.Fatalf("got %+v, want trades from the signals at bars 2 and 8", got)
 	}
