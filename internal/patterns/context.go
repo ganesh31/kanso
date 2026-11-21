@@ -21,6 +21,11 @@ type Context struct {
 	// LevelIdx[t] == -1 means there is no level at t.
 	Level    []float64
 	LevelIdx []int
+
+	// volSum[i] is the sum of volumes of bars 0 … i−1 and volPos[i] the
+	// count of those with non-zero volume (filled by VolumeSurge.Prepare).
+	volSum []float64
+	volPos []int
 }
 
 // NewContext aligns a series with its benchmark (which may be nil).
