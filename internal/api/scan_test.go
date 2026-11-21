@@ -132,12 +132,12 @@ func TestQuickscanUnknownUniverse404(t *testing.T) {
 }
 
 // TestBacktestValidationError400WithFields checks the system validation
-// contract every system endpoint shares, through POST /api/validate.
+// contract every system endpoint shares, through POST /api/backtest.
 func TestBacktestValidationError400WithFields(t *testing.T) {
 	sys := `{"name":"x","universe":"NIFTY50","entry":{
 		"all":[{"type":"n_year_high","params":{"years":3}}],
 		"any":[{"type":"volume_surge","params":{}}]}}`
-	status, body := do(t, server(t), "POST", "/api/validate", sys)
+	status, body := do(t, server(t), "POST", "/api/backtest", sys)
 	if status != 400 {
 		t.Fatalf("status %d: %s", status, body)
 	}

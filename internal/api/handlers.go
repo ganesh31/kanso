@@ -38,6 +38,7 @@ func register(api huma.API, h *handlers) {
 		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, h.bars)
 	registerScan(api, h)
+	registerBacktest(api, h)
 }
 
 // PatternsOutput lists the pattern registry.
