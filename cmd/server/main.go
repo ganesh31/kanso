@@ -1,6 +1,6 @@
 // Command server runs the Kanso HTTP API and serves the web app.
 //
-//	server -csv bars.csv [-addr :8080] [-web web/dist]
+//	server -db kanso.db [-addr :8080] [-web web/dist]
 //	server -dump-openapi > api/openapi.json
 package main
 
@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"kanso/internal/api"
-	"kanso/internal/market"
+	"kanso/internal/data"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 }
 
 func run() error {
-	csvPath := flag.String("csv", "", "CSV of daily bars (symbol,date,open,high,low,close,volume)")
+	dbPath := flag.String("db", "", "SQLite database written by cmd/ingest (opened read-only)")
 	addr := flag.String("addr", ":8080", "listen address")
 	webDir := flag.String("web", "web/dist", "directory of the built web app (empty: none)")
 	dump := flag.Bool("dump-openapi", false, "print the OpenAPI spec as JSON and exit")
@@ -42,16 +42,17 @@ func run() error {
 		_, err = os.Stdout.Write(spec)
 		return err
 	}
-	if *csvPath == "" {
-		return errors.New("-csv is required")
+	if *dbPath == "" {
+		return errors.New("-db is required")
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	prov, n, err := loadCSV(*csvPath)
+	prov, err := data.Open(*dbPath, true)
 	if err != nil {
 		return err
 	}
-	log.Info("loaded bars", "file", *csvPath, "symbols", n)
+	defer prov.Close()
+	log.Info("opened database", "file", *dbPath)
 
 	cfg := api.Config{Logger: log}
 	if *webDir != "" {
@@ -76,17 +77,4 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
-}
-
-func loadCSV(path string) (*market.MemProvider, int, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer f.Close()
-	bars, err := market.ReadCSV(f)
-	if err != nil {
-		return nil, 0, fmt.Errorf("%s: %w", path, err)
-	}
-	return market.MemProviderFromBars(bars), len(bars), nil
 }
