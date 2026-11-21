@@ -117,7 +117,7 @@ func Run(ctx context.Context, prov market.Provider, req Request) (*ScanResult, e
 	if err != nil {
 		return nil, err
 	}
-	bench, asOf, err := loadBenchmark(ctx, prov, benchmarkOf(sys.Entry), req.AsOf)
+	bench, asOf, err := loadBenchmark(ctx, prov, sys.Entry.Benchmark(), req.AsOf)
 	if err != nil {
 		return nil, err
 	}
@@ -274,19 +274,6 @@ func sortMatches(ms []Match) {
 		}
 		return ms[i].Symbol < ms[j].Symbol
 	})
-}
-
-// benchmarkOf is the benchmark the rule's relative strength uses, or the
-// default (Nifty 50).
-func benchmarkOf(e rules.Entry) string {
-	for _, c := range append(append([]rules.Condition{}, e.All...), e.Any...) {
-		if c.Type == patterns.TypeRelativeStrength {
-			if b := c.Params.String("benchmark"); b != "" {
-				return b
-			}
-		}
-	}
-	return patterns.DefaultBenchmark
 }
 
 // loadBenchmark loads the benchmark's daily bars up to the as-of date and

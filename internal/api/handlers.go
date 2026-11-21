@@ -106,7 +106,7 @@ func (h *handlers) report(ctx context.Context, in *ReportInput) (*ReportOutput, 
 			req.Timeframe = market.Daily
 		}
 	}
-	rep, err := report.Run(ctx, h.prov, in.Symbol, req.AsOf, req.Timeframe)
+	rep, err := report.Run(ctx, h.prov, in.Symbol, nil, req.AsOf, req.Timeframe)
 	if err != nil {
 		return nil, mapError(err, in.Symbol)
 	}

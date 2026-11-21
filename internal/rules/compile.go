@@ -95,6 +95,16 @@ func (c *Compiled) Prepare(ctx *patterns.Context) error {
 	return nil
 }
 
+// NotEvaluable is the outcome when there is no bar to evaluate: every
+// condition is not evaluable for reason.
+func (c *Compiled) NotEvaluable(reason patterns.Reason) Outcome {
+	out := Outcome{Conditions: make([]CondOutcome, len(c.conds)), AnyMatched: []int{}}
+	for i, cc := range c.conds {
+		out.Conditions[i] = CondOutcome{Group: cc.group, Index: cc.index, Condition: cc.cond, Result: patterns.NotEvaluableResult(reason)}
+	}
+	return out
+}
+
 // Eval evaluates the rule on bar t of a prepared context. Every condition
 // is evaluated, so the explanation is complete. The rule is not evaluable
 // when a required condition is not evaluable, or when no ANY branch passes
