@@ -1,0 +1,9 @@
+# Vite+ bundles its own Vite and Vitest. These overrides make every plugin and
+# test helper resolve the same copies (versions from `vp toolchain`).
+overrides:
+  vite@*: npm:@voidzero-dev/vite-plus-core@8.3.8000
+  vitest@*: 5.1.0
+
+# esbuild is pulled in transitively; Vite 8 builds with Rolldown/Oxc, so its install script is not needed.
+allowBuilds:
+  esbuild: false
