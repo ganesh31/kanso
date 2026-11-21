@@ -1,6 +1,63 @@
 package backtest
 
-import "slices"
+import (
+	"math"
+	"slices"
+
+	"kanso/internal/market"
+)
+
+// PortfolioStats are the portfolio metrics (spec §5.7). Returns and
+// drawdowns are fractions: 0.12 is 12%, a drawdown is ≤ 0.
+type PortfolioStats struct {
+	CAGR        float64
+	MaxDrawdown float64
+	FinalEquity float64
+	// Exposure is the fraction of trading days with a position held, 0–1.
+	Exposure float64
+	// BenchCAGR and BenchMaxDrawdown are buy-and-hold Nifty's.
+	BenchCAGR        float64
+	BenchMaxDrawdown float64
+}
+
+// CAGR is the curve's compound annual growth rate from its first point to
+// its last, or 0 for fewer than two points, a zero span or a non-positive
+// start or end.
+func CAGR(eq []EquityPoint) float64 {
+	if len(eq) < 2 {
+		return 0
+	}
+	first, last := eq[0], eq[len(eq)-1]
+	y := years(first.Date, last.Date)
+	if y <= 0 || first.Value <= 0 || last.Value <= 0 {
+		return 0
+	}
+	return math.Pow(last.Value/first.Value, 1/y) - 1
+}
+
+// years is the time from a to b in years: whole calendar years, plus the
+// remaining days over the length of the year they fall in.
+func years(a, b market.Date) float64 {
+	t, end := a.Time(), b.Time()
+	n := 0
+	for !t.AddDate(n+1, 0, 0).After(end) {
+		n++
+	}
+	from, to := t.AddDate(n, 0, 0), t.AddDate(n+1, 0, 0)
+	return float64(n) + end.Sub(from).Hours()/to.Sub(from).Hours()
+}
+
+// MaxDrawdown is the deepest fall from a running peak, as a fraction ≤ 0.
+func MaxDrawdown(eq []EquityPoint) float64 {
+	peak, mdd := math.Inf(-1), 0.0
+	for _, p := range eq {
+		peak = max(peak, p.Value)
+		if peak > 0 {
+			mdd = min(mdd, p.Value/peak-1)
+		}
+	}
+	return mdd
+}
 
 // TradeStats are the trade-level metrics (spec §5.7), over single-stock
 // trades with no slot limits.
