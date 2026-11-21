@@ -5,6 +5,8 @@ package market
 // close, spans the max high and min low, and sums the volume; it is dated
 // by its last daily bar. The last week is complete only once a later
 // week's first bar exists, so Complete is len(Bars)-1 when there are bars.
+// If the daily series has gap marks, each weekly bar carries the gaps of
+// its daily bars.
 func ToWeekly(daily *Series) *Series {
 	w := &Series{Instrument: daily.Instrument, Timeframe: Weekly, Bars: []Bar{}, LastDailyIdx: []int{}}
 	var prevY, prevW int
@@ -26,5 +28,11 @@ func ToWeekly(daily *Series) *Series {
 		w.LastDailyIdx[n-1] = i
 	}
 	w.Complete = max(len(w.Bars)-1, 0)
+	if daily.gapPrefix != nil {
+		w.gapPrefix = make([]int, len(w.Bars)+1)
+		for i, last := range w.LastDailyIdx {
+			w.gapPrefix[i+1] = daily.gapPrefix[last+1]
+		}
+	}
 	return w
 }

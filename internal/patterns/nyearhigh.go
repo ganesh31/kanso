@@ -69,8 +69,10 @@ func (NYearHigh) Prepare(ctx *Context, p Params) error {
 	return nil
 }
 
-// Eval implements Pattern in O(1) after Prepare.
-func (NYearHigh) Eval(ctx *Context, _ Params, t int) Result {
+// Eval implements Pattern in O(1) after Prepare. A data gap inside the
+// lookback window (or anywhere in the history for all-time) makes the bar
+// not evaluable.
+func (NYearHigh) Eval(ctx *Context, p Params, t int) Result {
 	s := ctx.Series
 	if t < 0 || t >= s.Complete {
 		return NotEvaluableResult(ReasonIncompleteBar)
@@ -78,6 +80,13 @@ func (NYearHigh) Eval(ctx *Context, _ Params, t int) Result {
 	idx := ctx.LevelIdx[t]
 	if idx < 0 {
 		return NotEvaluableResult(ReasonInsufficientHistory)
+	}
+	start := 0
+	if !p.Bool("all_time") {
+		start = t - ToBars(p.Float("years"), Years, s.Timeframe)
+	}
+	if s.GapsIn(start, t) > 0 {
+		return NotEvaluableResult(ReasonDataGap)
 	}
 	level := ctx.Level[t]
 	if level <= 0 {

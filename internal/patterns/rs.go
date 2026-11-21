@@ -1,8 +1,10 @@
 package patterns
 
+import "kanso/internal/market"
+
 // DefaultBenchmark is the benchmark symbol relative strength is measured
 // against by default: Nifty 50 (spec §5.3).
-const DefaultBenchmark = "^NSEI"
+const DefaultBenchmark = market.Benchmark
 
 // RelativeStrength passes when the stock's return over the last rs_months
 // beats the benchmark's over the same bars (spec §5.3). The benchmark is
