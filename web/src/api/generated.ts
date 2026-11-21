@@ -6,16 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -36,28 +40,19 @@ export interface BarsOutputBody {
   symbol: string;
 }
 
-export interface ErrorDetail {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
-}
+export type CondOutcomeGroup = typeof CondOutcomeGroup[keyof typeof CondOutcomeGroup];
 
-export interface ErrorModel {
-  /** A human-readable explanation specific to this occurrence of the problem. */
-  detail?: string;
-  /** Optional list of individual error details */
-  errors?: ErrorDetail[];
-  /** A URI reference that identifies the specific occurrence of the problem. */
-  instance?: string;
-  /** HTTP status code */
-  status?: number;
-  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
-  title?: string;
-  /** A URI reference to human-readable documentation for the error. */
-  type?: string;
+
+export const CondOutcomeGroup = {
+  all: 'all',
+  any: 'any',
+} as const;
+
+export type ConditionParams = {[key: string]: unknown};
+
+export interface Condition {
+  params?: ConditionParams;
+  type: string;
 }
 
 export type NYearHighEvidenceType = typeof NYearHighEvidenceType[keyof typeof NYearHighEvidenceType];
@@ -157,6 +152,94 @@ export interface NotEvaluable {
  */
 export type Evidence = NYearHighEvidence | LevelAgeEvidence | NotExtendedEvidence | RSEvidence | VolumeEvidence | NotEvaluable;
 
+export interface Result {
+  evaluable: boolean;
+  evidence: Evidence;
+  pass: boolean;
+}
+
+export interface CondOutcome {
+  condition: Condition;
+  group: CondOutcomeGroup;
+  /** Position within its group */
+  index: number;
+  result: Result;
+}
+
+export interface Costs {
+  /** Brokerage and statutory charges, % per side */
+  per_side_pct: number;
+  /** Slippage, % per side */
+  slippage_pct: number;
+}
+
+export interface Entry {
+  all: Condition[];
+  any?: Condition[];
+}
+
+export interface ErrorDetail {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+}
+
+export interface ErrorModel {
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /** Optional list of individual error details */
+  errors?: ErrorDetail[];
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
+}
+
+export interface Exits {
+  /** Stop-loss, % below the entry fill */
+  stop_pct: number;
+  /** Exit when a weekly close is below this SMA of weekly closes; 0 disables */
+  trend_sma_weeks: number;
+}
+
+export interface Outcome {
+  /** Indexes of the ANY branches that passed */
+  any_matched: number[];
+  conditions: CondOutcome[];
+  evaluable: boolean;
+  pass: boolean;
+}
+
+export interface Match {
+  /** Bar evaluated: the as-of day, or the last complete week */
+  date: string;
+  level?: number;
+  /** Bars since the level was set */
+  level_age_bars?: number;
+  level_date?: string;
+  outcome: Outcome;
+  /** Close above the level, in percent */
+  pct_above?: number;
+  /** The rule on the week in progress (weekly only) */
+  provisional?: Outcome;
+  /** Stock return minus benchmark return, as a fraction */
+  rs_diff?: number;
+  /** Latest signal in the fresh window (fresh mode) */
+  signal_date?: string;
+  symbol: string;
+  /** First bar of the current pass streak (all mode) */
+  true_since?: string;
+  /** Volume over the prior window's average */
+  vol_ratio?: number;
+}
+
 export type ParamSpecKind = typeof ParamSpecKind[keyof typeof ParamSpecKind];
 
 
@@ -200,6 +283,50 @@ export interface PatternsOutputBody {
   patterns: Meta[];
 }
 
+export interface Portfolio {
+  /** Starting capital in rupees */
+  capital: number;
+  /** Maximum concurrent positions */
+  max_positions: number;
+}
+
+/**
+ * fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now
+ */
+export type QuickscanRequestMode = typeof QuickscanRequestMode[keyof typeof QuickscanRequestMode];
+
+
+export const QuickscanRequestMode = {
+  fresh: 'fresh',
+  all: 'all',
+} as const;
+
+/**
+ * Param values; missing ones take their defaults
+ */
+export type QuickscanRequestParams = {[key: string]: unknown};
+
+export type QuickscanRequestTimeframe = typeof QuickscanRequestTimeframe[keyof typeof QuickscanRequestTimeframe];
+
+
+export const QuickscanRequestTimeframe = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+export interface QuickscanRequest {
+  /** Scan as of this date (default: the latest benchmark date) */
+  as_of?: string;
+  /** fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now */
+  mode?: QuickscanRequestMode;
+  /** Param values; missing ones take their defaults */
+  params?: QuickscanRequestParams;
+  /** Pattern or filter type, from /api/patterns */
+  pattern: string;
+  timeframe?: QuickscanRequestTimeframe;
+  universe: string;
+}
+
 export type ReportTimeframe = typeof ReportTimeframe[keyof typeof ReportTimeframe];
 
 
@@ -207,12 +334,6 @@ export const ReportTimeframe = {
   daily: 'daily',
   weekly: 'weekly',
 } as const;
-
-export interface Result {
-  evaluable: boolean;
-  evidence: Evidence;
-  pass: boolean;
-}
 
 export type ReportLineParams = {[key: string]: unknown};
 
@@ -251,6 +372,52 @@ export interface ReportRequest {
   as_of?: string;
   /** Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars */
   timeframe?: ReportRequestTimeframe;
+}
+
+export interface ScanResult {
+  /** Date scanned, from the data */
+  as_of: string;
+  /** Condition types added because the pattern needs them */
+  auto_inserted: string[];
+  matches: Match[];
+  /** Stocks with no bars up to as_of */
+  skipped: string[];
+  /** Stocks whose last bar is before as_of; never matched */
+  stale: string[];
+}
+
+export type SystemTimeframe = typeof SystemTimeframe[keyof typeof SystemTimeframe];
+
+
+export const SystemTimeframe = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+export interface System {
+  costs?: Costs;
+  entry: Entry;
+  exits?: Exits;
+  id?: string;
+  name: string;
+  portfolio?: Portfolio;
+  timeframe?: SystemTimeframe;
+  universe: string;
+}
+
+export interface Universe {
+  /** False when only today's members are known (survivorship bias) */
+  has_history: boolean;
+  members: number;
+  name: string;
+}
+
+export interface UniversesOutputBody {
+  universes: Universe[];
+}
+
+export interface ValidateOutputBody {
+  system: System;
 }
 
 export type GetBarsParams = {
@@ -516,6 +683,107 @@ export function useListPatterns<TData = Awaited<ReturnType<typeof listPatterns>>
 
 
 
+export const getQuickScanUrl = () => {
+
+
+
+
+  return `/api/quickscan`
+}
+
+/**
+ * @summary Scan a stock list for one pattern or filter
+ */
+export const quickScan = async (quickscanRequest: QuickscanRequest, options?: Parameters<typeof apiFetch>[1]): Promise<ScanResult> => {
+
+  return apiFetch<ScanResult>(getQuickScanUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(quickscanRequest)
+  }
+);}
+
+
+
+
+
+export const getQuickScanQueryKey = (quickscanRequest?: QuickscanRequest,) => {
+    return [
+    'POST', `/api/quickscan`, quickscanRequest
+    ] as const;
+    }
+
+
+export const getQuickScanQueryOptions = <TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getQuickScanQueryKey(quickscanRequest);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof quickScan>>> = ({ signal }) => quickScan(quickscanRequest, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type QuickScanQueryResult = NonNullable<Awaited<ReturnType<typeof quickScan>>>
+export type QuickScanQueryError = ErrorType<ErrorModel>
+
+
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof quickScan>>,
+          TError,
+          Awaited<ReturnType<typeof quickScan>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof quickScan>>,
+          TError,
+          Awaited<ReturnType<typeof quickScan>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getQuickScanQueryOptions(quickscanRequest,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getStockReportUrl = (symbol: string,) => {
 
 
@@ -617,3 +885,182 @@ export function useStockReport<TData = Awaited<ReturnType<typeof stockReport>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
+export const getListUniversesUrl = () => {
+
+
+
+
+  return `/api/universes`
+}
+
+/**
+ * @summary List every stock list
+ */
+export const listUniverses = async ( options?: Parameters<typeof apiFetch>[1]): Promise<UniversesOutputBody> => {
+
+  return apiFetch<UniversesOutputBody>(getListUniversesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUniversesQueryKey = () => {
+    return [
+    `/api/universes`
+    ] as const;
+    }
+
+
+export const getListUniversesQueryOptions = <TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUniversesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUniverses>>> = ({ signal }) => listUniverses({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListUniversesQueryResult = NonNullable<Awaited<ReturnType<typeof listUniverses>>>
+export type ListUniversesQueryError = ErrorType<ErrorModel>
+
+
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listUniverses>>,
+          TError,
+          Awaited<ReturnType<typeof listUniverses>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listUniverses>>,
+          TError,
+          Awaited<ReturnType<typeof listUniverses>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListUniversesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getValidateSystemUrl = () => {
+
+
+
+
+  return `/api/validate`
+}
+
+/**
+ * @summary Validate a system and return it with defaults filled in
+ */
+export const validateSystem = async (system: System, options?: Parameters<typeof apiFetch>[1]): Promise<ValidateOutputBody> => {
+
+  return apiFetch<ValidateOutputBody>(getValidateSystemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(system)
+  }
+);}
+
+
+
+
+
+export const getValidateSystemMutationKey = () => ['validateSystem'] as const;
+
+export const getValidateSystemMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateSystem>>, TError,ValidateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateSystem>>, TError,ValidateSystemMutationVariables, TContext> => {
+
+const mutationKey = getValidateSystemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateSystem>>, ValidateSystemMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  validateSystem(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateSystemMutationResult = NonNullable<Awaited<ReturnType<typeof validateSystem>>>
+    export type ValidateSystemMutationBody = System
+    export type ValidateSystemMutationError = ErrorType<ErrorModel>
+    export type ValidateSystemMutationVariables = {data: System}
+
+    /** @summary Validate a system and return it with defaults filled in */
+export const useValidateSystem = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateSystem>>, TError,ValidateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof validateSystem>>,
+        TError,
+        ValidateSystemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getValidateSystemMutationOptions(options), queryClient);
+    }
