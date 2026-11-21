@@ -34,5 +34,10 @@ build:
 run: build
 	./bin/server -csv $(CSV)
 
-sqlc benchmark e2e demo-snapshot:
+# Regenerate internal/data/db from the SQL (sqlc v1.31.1:
+# CGO_ENABLED=1 go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1).
+sqlc:
+	sqlc generate -f internal/data/sqlc.yaml
+
+benchmark e2e demo-snapshot:
 	@echo "make $@: not implemented yet (later V1 ticket)"; exit 1
