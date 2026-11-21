@@ -61,6 +61,13 @@ describe("MatchTable", () => {
     const m: Match = { ...match("TCS", 1), provisional: { ...outcome, pass: false } };
     render(<MatchTable matches={[m]} sort="pct_above" onSortChange={() => {}} onOpen={() => {}} />);
     expect(screen.getByRole("columnheader", { name: /This week/ })).toBeInTheDocument();
-    expect(screen.getByText("❌ provisional")).toBeInTheDocument();
+    expect(screen.getByText("Fails so far")).toBeInTheDocument();
+  });
+
+  test("hides columns no match fills, such as volume and RS on a one-pattern scan", () => {
+    render(<MatchTable matches={[match("TCS", 2.5)]} sort="pct_above" onSortChange={() => {}} onOpen={() => {}} />);
+    expect(screen.queryByRole("columnheader", { name: /Volume/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /RS vs Nifty/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /% above/ })).toBeInTheDocument();
   });
 });

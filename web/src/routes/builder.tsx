@@ -7,10 +7,13 @@ export const Route = createFileRoute("/builder")({
 
 function BuilderPage() {
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-baseline gap-x-4">
-        <h1 className="text-2xl font-semibold tracking-tight">System Builder</h1>
-        <span className="text-muted-foreground text-sm">Backtest a system with next-day-open fills and costs</span>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-3xl font-bold tracking-tight">System Builder</h1>
+        <p className="text-muted-foreground max-w-2xl">
+          Test a breakout rule on every stock since 2007. Trades fill at the next day&apos;s open, after costs and
+          slippage.
+        </p>
       </header>
       <BacktestPanel />
     </div>

@@ -23,19 +23,19 @@ export function PriceChart({ bars, level }: { bars: Bar[]; level?: number }) {
       layout: {
         attributionLogo: true,
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#a3a3a3",
+        textColor: "#a3adc2",
       },
-      grid: { vertLines: { color: "#262626" }, horzLines: { color: "#262626" } },
-      timeScale: { borderColor: "#404040" },
-      rightPriceScale: { borderColor: "#404040" },
+      grid: { vertLines: { color: "#1f2c49" }, horzLines: { color: "#1f2c49" } },
+      timeScale: { borderColor: "#2e3f62" },
+      rightPriceScale: { borderColor: "#2e3f62" },
     });
     chart.current = c;
     candles.current = c.addSeries(CandlestickSeries, {
-      upColor: "#22c55e",
-      downColor: "#ef4444",
+      upColor: "#79c49a",
+      downColor: "#e5746a",
       borderVisible: false,
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
+      wickUpColor: "#79c49a",
+      wickDownColor: "#e5746a",
     });
     return () => {
       c.remove();
@@ -56,7 +56,7 @@ export function PriceChart({ bars, level }: { bars: Bar[]; level?: number }) {
     if (!series || level === undefined) return;
     const line: IPriceLine = series.createPriceLine({
       price: level,
-      color: "#f59e0b",
+      color: "#e3a63b",
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,

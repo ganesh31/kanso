@@ -1,6 +1,7 @@
 import type { Meta } from "@/api/client";
 
-const selectClass = "border-input h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs";
+const selectClass =
+  "border-input bg-background h-9 rounded-md border px-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /** Picks one pattern or filter from the registry. */
 export function PatternPicker({
@@ -14,7 +15,7 @@ export function PatternPicker({
 }) {
   const current = patterns.find((p) => p.type === value);
   return (
-    <label className="flex flex-col gap-1 text-sm">
+    <label className="flex max-w-md flex-col gap-1 text-sm">
       <span>Pattern</span>
       <select aria-label="Pattern" className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
         {patterns.map((p) => (

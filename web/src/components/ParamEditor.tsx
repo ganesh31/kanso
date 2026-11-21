@@ -48,8 +48,8 @@ export function ParamEditor({
               >
                 <span
                   className={cn(
-                    "bg-background absolute top-0.5 size-3.5 rounded-full transition-transform",
-                    on ? "translate-x-4" : "translate-x-0.5",
+                    "absolute top-0.5 left-0 size-3.5 rounded-full transition-transform",
+                    on ? "bg-primary-foreground translate-x-4" : "bg-muted-foreground translate-x-0.5",
                   )}
                 />
               </button>
@@ -61,7 +61,9 @@ export function ParamEditor({
           <label key={s.name} htmlFor={id} className="flex flex-col gap-1 text-sm">
             <span>
               {s.label}
-              {s.unit ? <span className="text-muted-foreground"> ({s.unit})</span> : null}
+              {s.unit && !s.label.toLowerCase().includes(s.unit) ? (
+                <span className="text-muted-foreground"> ({s.unit})</span>
+              ) : null}
             </span>
             {s.kind === "number" ? (
               <Input

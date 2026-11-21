@@ -2,35 +2,43 @@ import {
   ApiError,
   useBacktest,
   useGetDefaultSystem,
+  useListPatterns,
   type Condition,
   type Honesty,
   type PortfolioStats,
   type Trade,
   type TradeStats,
 } from "@/api/client";
+import { useState } from "react";
 import { EquityChart } from "@/components/EquityChart";
+import { describeRule } from "@/components/EvidenceList";
 import { Button } from "@/components/ui/button";
 import { formatPrice, formatSignedPct, humanize } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-function describeCondition(c: Condition): string {
-  const params = Object.entries(c.params ?? {})
-    .filter(([, v]) => v !== false)
-    .map(([k, v]) => `${humanize(k)} ${String(v)}`);
-  return params.length > 0 ? `${humanize(c.type)} (${params.join(", ")})` : humanize(c.type);
+/** A condition as its registry label and the rule its params set, e.g. "Volume surge: needs volume at least 2×…". */
+function ConditionItem({ c, labels }: { c: Condition; labels: Map<string, string> }) {
+  const rule = describeRule(c.type, c.params ?? {});
+  return (
+    <li className="flex flex-col">
+      <span className="font-semibold">{labels.get(c.type) ?? humanize(c.type)}</span>
+      {rule ? <span className="text-muted-foreground text-sm">{rule}</span> : null}
+    </li>
+  );
 }
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-card flex flex-col gap-1 rounded-md border px-3 py-2">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
+    <div className="flex flex-col gap-0.5 border-l-2 pl-3">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className="text-lg font-bold tabular-nums">{value}</span>
     </div>
   );
 }
 
 function TradeTiles({ stats }: { stats: TradeStats }) {
   return (
-    <section aria-label="Trade-level stats" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+    <section aria-label="Trade-level stats" className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
       <Tile label="Trades" value={String(stats.trades)} />
       <Tile label="Win rate" value={`${(stats.win_rate * 100).toFixed(1)}%`} />
       <Tile label="Avg win" value={formatSignedPct(stats.avg_win_pct)} />
@@ -41,14 +49,27 @@ function TradeTiles({ stats }: { stats: TradeStats }) {
   );
 }
 
-/** A portfolio metric with buy-and-hold Nifty's value beside it. */
-function ComparedTile({ label, value, nifty }: { label: string; value: string; nifty: string }) {
+/** A portfolio metric with buy-and-hold Nifty's value beside it, and which one did better. */
+function ComparedTile({
+  label,
+  value,
+  nifty,
+  better,
+  verdict,
+}: {
+  label: string;
+  value: string;
+  nifty: string;
+  better: boolean;
+  verdict: string;
+}) {
   return (
-    <div role="group" aria-label={label} className="bg-card flex flex-col gap-1 rounded-md border px-3 py-2">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="flex items-baseline gap-2">
-        <span className="text-lg font-semibold tabular-nums">{value}</span>
-        <span className="text-muted-foreground text-sm tabular-nums">Nifty {nifty}</span>
+    <div role="group" aria-label={label} className="bg-card flex flex-col gap-1 rounded-md border px-4 py-3">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className="text-2xl font-bold tabular-nums">{value}</span>
+      <span className="text-sm tabular-nums">
+        <span className="text-muted-foreground">Nifty {nifty}, </span>
+        <span className={better ? "text-pass" : "text-fail"}>{verdict}</span>
       </span>
     </div>
   );
@@ -56,9 +77,9 @@ function ComparedTile({ label, value, nifty }: { label: string; value: string; n
 
 function PlainTile({ label, value }: { label: string; value: string }) {
   return (
-    <div role="group" aria-label={label} className="bg-card flex flex-col gap-1 rounded-md border px-3 py-2">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
+    <div role="group" aria-label={label} className="bg-card flex flex-col gap-1 rounded-md border px-4 py-3">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className="text-2xl font-bold tabular-nums">{value}</span>
     </div>
   );
 }
@@ -68,12 +89,20 @@ const fractionPct = (f: number) => formatSignedPct(f * 100);
 
 function PortfolioTiles({ stats }: { stats: PortfolioStats }) {
   return (
-    <section aria-label="Portfolio stats" className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      <ComparedTile label="CAGR" value={fractionPct(stats.cagr)} nifty={fractionPct(stats.bench_cagr)} />
+    <section aria-label="Portfolio stats" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <ComparedTile
+        label="CAGR"
+        value={fractionPct(stats.cagr)}
+        nifty={fractionPct(stats.bench_cagr)}
+        better={stats.cagr >= stats.bench_cagr}
+        verdict={stats.cagr >= stats.bench_cagr ? "ahead" : "behind"}
+      />
       <ComparedTile
         label="Max drawdown"
         value={fractionPct(stats.max_drawdown)}
         nifty={fractionPct(stats.bench_max_drawdown)}
+        better={stats.max_drawdown >= stats.bench_max_drawdown}
+        verdict={stats.max_drawdown >= stats.bench_max_drawdown ? "shallower" : "deeper"}
       />
       <PlainTile label="Final equity" value={`₹${formatPrice(stats.final_equity)}`} />
       <PlainTile label="Exposure" value={`${(stats.exposure * 100).toFixed(1)}%`} />
@@ -105,42 +134,53 @@ function exitLabel(t: Trade): string {
   return t.exit_reason === "stop" && t.gapped_stop ? "stop (gapped)" : t.exit_reason;
 }
 
+const TRADES_SHOWN = 25;
+
 function TradeList({ trades }: { trades: Trade[] }) {
+  const [all, setAll] = useState(false);
   if (trades.length === 0) return <p className="text-muted-foreground">No trades.</p>;
+  const shown = all ? trades : trades.slice(0, TRADES_SHOWN);
   return (
-    <div className="overflow-x-auto">
-      <table aria-label="Trades" className="w-full text-sm">
-        <thead className="text-muted-foreground text-left">
-          <tr>
-            <th className="py-1 pr-3 font-medium">Symbol</th>
-            <th className="py-1 pr-3 font-medium">Signal</th>
-            <th className="py-1 pr-3 font-medium">Entry</th>
-            <th className="py-1 pr-3 text-right font-medium">Entry price</th>
-            <th className="py-1 pr-3 font-medium">Exit</th>
-            <th className="py-1 pr-3 text-right font-medium">Exit price</th>
-            <th className="py-1 pr-3 font-medium">Reason</th>
-            <th className="py-1 pr-3 text-right font-medium">Return</th>
-            <th className="py-1 text-right font-medium">Days</th>
-          </tr>
-        </thead>
-        <tbody className="tabular-nums">
-          {trades.map((t) => (
-            <tr key={`${t.symbol}-${t.entry_date}`} className="border-t">
-              <td className="py-1 pr-3 font-medium">{t.symbol}</td>
-              <td className="py-1 pr-3">{t.signal_date}</td>
-              <td className="py-1 pr-3">{t.entry_date}</td>
-              <td className="py-1 pr-3 text-right">{formatPrice(t.entry_price)}</td>
-              <td className="py-1 pr-3">{t.exit_date}</td>
-              <td className="py-1 pr-3 text-right">{formatPrice(t.exit_price)}</td>
-              <td className="py-1 pr-3">{exitLabel(t)}</td>
-              <td className={`py-1 pr-3 text-right ${t.return_pct > 0 ? "text-emerald-500" : "text-red-500"}`}>
-                {formatSignedPct(t.return_pct)}
-              </td>
-              <td className="py-1 text-right">{t.holding_days}</td>
+    <div className="flex flex-col gap-3">
+      <div className="overflow-x-auto">
+        <table aria-label="Trades" className="w-full text-sm">
+          <thead className="text-muted-foreground text-left">
+            <tr>
+              <th className="py-1 pr-3 font-medium">Symbol</th>
+              <th className="py-1 pr-3 font-medium">Signal</th>
+              <th className="py-1 pr-3 font-medium">Entry</th>
+              <th className="py-1 pr-3 text-right font-medium">Entry price</th>
+              <th className="py-1 pr-3 font-medium">Exit</th>
+              <th className="py-1 pr-3 text-right font-medium">Exit price</th>
+              <th className="py-1 pr-3 font-medium">Reason</th>
+              <th className="py-1 pr-3 text-right font-medium">Return</th>
+              <th className="py-1 text-right font-medium">Days</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="tabular-nums">
+            {shown.map((t) => (
+              <tr key={`${t.symbol}-${t.entry_date}`} className="border-t">
+                <td className="py-1 pr-3 font-medium">{t.symbol}</td>
+                <td className="py-1 pr-3">{t.signal_date}</td>
+                <td className="py-1 pr-3">{t.entry_date}</td>
+                <td className="py-1 pr-3 text-right">{formatPrice(t.entry_price)}</td>
+                <td className="py-1 pr-3">{t.exit_date}</td>
+                <td className="py-1 pr-3 text-right">{formatPrice(t.exit_price)}</td>
+                <td className="py-1 pr-3">{exitLabel(t)}</td>
+                <td className={cn("py-1 pr-3 text-right", t.return_pct > 0 ? "text-pass" : "text-fail")}>
+                  {formatSignedPct(t.return_pct)}
+                </td>
+                <td className="py-1 text-right">{t.holding_days}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {trades.length > TRADES_SHOWN ? (
+        <Button variant="outline" className="self-start" onClick={() => setAll((a) => !a)}>
+          {all ? `Show the first ${TRADES_SHOWN} trades` : `Show all ${trades.length} trades`}
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -149,6 +189,8 @@ function TradeList({ trades }: { trades: Trade[] }) {
 export function BacktestPanel() {
   const def = useGetDefaultSystem();
   const run = useBacktest();
+  const patterns = useListPatterns({ query: { select: (b) => b.patterns } });
+  const labels = new Map((patterns.data ?? []).map((p) => [p.type, p.label]));
 
   if (def.isPending) return <p className="text-muted-foreground">Loading the default system…</p>;
   if (def.isError)
@@ -160,25 +202,29 @@ export function BacktestPanel() {
   const system = def.data.system;
 
   return (
-    <div className="flex flex-col gap-4">
-      <section className="flex flex-col gap-2 rounded-md border p-3">
-        <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold">{system.name}</h2>
+    <div className="flex flex-col gap-8">
+      <section aria-labelledby="system-name" className="bg-card flex flex-col gap-4 rounded-lg border p-5">
+        <header className="flex flex-col gap-0.5">
+          <h2 id="system-name" className="text-xl font-bold">
+            {system.name}
+          </h2>
           <span className="text-muted-foreground text-sm">
-            {system.universe} · {system.timeframe ?? "daily"}
+            {`Buys ${system.universe} stocks when every condition below holds on a ${system.timeframe ?? "daily"} bar`}
           </span>
         </header>
-        <ul className="list-disc pl-5 text-sm">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {system.entry.all.map((c) => (
-            <li key={c.type}>{describeCondition(c)}</li>
+            <ConditionItem key={c.type} c={c} labels={labels} />
           ))}
         </ul>
         {system.exits ? (
-          <p className="text-muted-foreground text-sm">
-            Stop {system.exits.stop_pct}% below entry
+          <p className="border-t pt-3 text-sm">
+            <span className="font-semibold">Exits: </span>
+            stop {system.exits.stop_pct}% below entry
             {system.exits.trend_sma_weeks > 0
-              ? `; exit when a week closes below its ${system.exits.trend_sma_weeks}-week average`
+              ? `, or sell when a week closes below its ${system.exits.trend_sma_weeks}-week average`
               : ""}
+            .
           </p>
         ) : null}
         <div>
@@ -188,7 +234,7 @@ export function BacktestPanel() {
         </div>
       </section>
 
-      {run.isPending ? <p className="text-muted-foreground">Backtesting {system.universe}…</p> : null}
+      {run.isPending ? <p className="text-muted-foreground">Backtesting {system.universe} since 2007…</p> : null}
       {run.isError ? (
         <div role="alert" className="text-destructive">
           <p>{run.error.message}</p>
@@ -204,13 +250,14 @@ export function BacktestPanel() {
         </div>
       ) : null}
       {run.isSuccess ? (
-        <section className="flex flex-col gap-3">
-          <h3 className="font-semibold">Portfolio</h3>
-          <PortfolioTiles stats={run.data.portfolio} />
-          <EquityChart equity={run.data.equity} benchmark={run.data.benchmark} />
-          <h3 className="font-semibold">Trade-level (every signal, no slot limits)</h3>
-          <TradeTiles stats={run.data.trade_stats} />
-          <div className="text-muted-foreground flex flex-col gap-1 text-xs">
+        <section className="flex flex-col gap-8">
+          <div className="flex flex-col gap-3">
+            <h3 className="text-lg font-bold">Portfolio</h3>
+            <PortfolioTiles stats={run.data.portfolio} />
+            <EquityChart equity={run.data.equity} benchmark={run.data.benchmark} />
+          </div>
+          <div className="text-muted-foreground flex flex-col gap-1 border-l-2 pl-4 text-sm">
+            <h3 className="text-foreground font-semibold">How this was tested</h3>
             <p>
               Fills at the {run.data.honesty.fill_model}; costs {run.data.honesty.per_side_pct}% and slippage{" "}
               {run.data.honesty.slippage_pct}% per side. Data {run.data.honesty.data_start} to{" "}
@@ -223,7 +270,14 @@ export function BacktestPanel() {
               <p key={line}>{line}</p>
             ))}
           </div>
-          <TradeList trades={run.data.trades} />
+          <div className="flex flex-col gap-3">
+            <h3 className="text-lg font-bold">Every signal</h3>
+            <p className="text-muted-foreground -mt-2 text-sm">
+              Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
+            </p>
+            <TradeTiles stats={run.data.trade_stats} />
+            <TradeList trades={run.data.trades} />
+          </div>
         </section>
       ) : null}
     </div>

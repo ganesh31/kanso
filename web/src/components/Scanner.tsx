@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { SegmentedTrack, segmentClass } from "@/components/ui/segmented";
 import type { ScannerSearch } from "@/lib/scannerSearch";
 import { QuickScan } from "./QuickScan";
 import { SavedScan } from "./SavedScan";
@@ -32,24 +32,23 @@ export function Scanner({
   return (
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-baseline gap-x-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Scanner</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Scanner</h1>
         <span className="text-muted-foreground text-sm">{tabs.find((t) => t.value === tab)?.blurb}</span>
       </header>
-      <div role="tablist" aria-label="Scanner" className="flex gap-2">
+      <SegmentedTrack role="tablist" aria-label="Scanner" className="self-start">
         {tabs.map((t) => (
-          <Button
+          <button
             key={t.value}
             type="button"
             role="tab"
-            size="sm"
-            variant={tab === t.value ? "outline" : "ghost"}
+            className={segmentClass(tab === t.value)}
             aria-selected={tab === t.value}
             onClick={() => onSearchChange({ ...search, tab: t.value })}
           >
             {t.label}
-          </Button>
+          </button>
         ))}
-      </div>
+      </SegmentedTrack>
       <div role="tabpanel">
         {tab === "saved" ? (
           <SavedScan search={search} onSearchChange={onSearchChange} onOpenReport={onOpenReport} />

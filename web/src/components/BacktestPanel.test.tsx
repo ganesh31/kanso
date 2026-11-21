@@ -134,7 +134,8 @@ describe("BacktestPanel", () => {
   test("opens on the default system and backtests it", async () => {
     renderPanel();
     expect(await screen.findByText("3-year breakout")).toBeInTheDocument();
-    expect(screen.getByText(/NIFTY50 · daily/)).toBeInTheDocument();
+    expect(screen.getByText("Buys NIFTY50 stocks when every condition below holds on a daily bar")).toBeInTheDocument();
+    expect(screen.getByText("Close above the highest high of the prior 3 years")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Backtest" }));
     await waitFor(() => expect(backtest).toHaveBeenCalledWith(system));
 
@@ -195,5 +196,20 @@ describe("BacktestPanel", () => {
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("entry.any: too few");
+  });
+
+  test("long trade lists show 25 rows until asked for all", async () => {
+    const first = result.trades[0]!;
+    const trades = Array.from({ length: 30 }, (_, i) => ({
+      ...first,
+      symbol: `S${String(i).padStart(2, "0")}`,
+    }));
+    backtest.mockReturnValue(json(200, { ...result, trades }));
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    const table = await screen.findByRole("table", { name: "Trades" });
+    expect(within(table).getAllByRole("row")).toHaveLength(1 + 25);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 30 trades" }));
+    expect(within(table).getAllByRole("row")).toHaveLength(1 + 30);
   });
 });

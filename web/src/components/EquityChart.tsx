@@ -1,9 +1,16 @@
-import { ColorType, createChart, LineSeries, type IChartApi, type ISeriesApi } from "lightweight-charts";
+import {
+  ColorType,
+  createChart,
+  LineSeries,
+  PriceScaleMode,
+  type IChartApi,
+  type ISeriesApi,
+} from "lightweight-charts";
 import { useEffect, useRef } from "react";
 import type { EquityPoint } from "@/api/client";
 
-const EQUITY_COLOR = "#38bdf8";
-const NIFTY_COLOR = "#a3a3a3";
+const EQUITY_COLOR = "#ece8de";
+const NIFTY_COLOR = "#7f8aa3";
 
 const toLine = (points: EquityPoint[]) => points.map((p) => ({ time: p.date, value: p.value }));
 
@@ -20,12 +27,13 @@ export function EquityChart({ equity, benchmark }: { equity: EquityPoint[]; benc
       layout: {
         attributionLogo: true,
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#a3a3a3",
+        textColor: "#a3adc2",
       },
-      grid: { vertLines: { color: "#262626" }, horzLines: { color: "#262626" } },
+      grid: { vertLines: { color: "#1f2c49" }, horzLines: { color: "#1f2c49" } },
       // Twenty years of daily closes must fit: the default 0.5px minimum bar spacing would crop them.
-      timeScale: { borderColor: "#404040", minBarSpacing: 0.01 },
-      rightPriceScale: { borderColor: "#404040" },
+      timeScale: { borderColor: "#2e3f62", minBarSpacing: 0.01 },
+      // Log scale: 19 years of compounding, where equal % moves should look equal.
+      rightPriceScale: { borderColor: "#2e3f62", mode: PriceScaleMode.Logarithmic },
       localization: { priceFormatter: (v: number) => `₹${Math.round(v).toLocaleString("en-IN")}` },
     });
     chart.current = c;
@@ -55,6 +63,7 @@ export function EquityChart({ equity, benchmark }: { equity: EquityPoint[]; benc
         <span>
           <span style={{ color: NIFTY_COLOR }}>■</span> Nifty 50 (buy and hold)
         </span>
+        <span>Log scale</span>
       </figcaption>
       <div ref={el} className="h-[360px] w-full" data-testid="equity-chart" />
     </figure>

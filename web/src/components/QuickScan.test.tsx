@@ -186,7 +186,7 @@ describe("QuickScan", () => {
     });
     const onOpen = vi.fn();
     renderQuickScan({ pattern: "volume_surge", universe: "NIFTY50" }, onOpen);
-    expect(await screen.findByText("2 stale, 1 skipped")).toBeInTheDocument();
+    expect(await screen.findByText("2 with stale data, 1 skipped")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "TCS" }));
     expect(onOpen).toHaveBeenCalledWith("TCS");
   });

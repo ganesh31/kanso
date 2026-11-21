@@ -104,10 +104,10 @@ describe("StockReport", () => {
 
   afterEach(() => configureApi({}));
 
-  test("StockReport renders ✅/❌ lines and 'insufficient history'", async () => {
+  test("StockReport renders pass/can't-tell lines and 'insufficient history'", async () => {
     report.mockReturnValueOnce({ status: 200, body: breakout });
     const { unmount } = renderReport("DIVISLAB");
-    expect(await screen.findByText("✅")).toBeInTheDocument();
+    expect(await screen.findByText("Pass")).toBeInTheDocument();
     expect(
       screen.getByText(/Old high 4,105.20 set 2021-10-25, 2 years 10 months ago \(717 bars\)/),
     ).toBeInTheDocument();
@@ -115,16 +115,21 @@ describe("StockReport", () => {
 
     report.mockReturnValueOnce({ status: 200, body: tooNew });
     renderReport("NEWCO");
-    expect(await screen.findByText("❌")).toBeInTheDocument();
+    expect(await screen.findByText("Can't tell")).toBeInTheDocument();
     expect(screen.getByText("not evaluable (insufficient history)")).toBeInTheDocument();
+    expect(screen.getByText("Can't tell yet: insufficient history.")).toBeInTheDocument();
   });
 
-  test("StockReport shows level line value in header", async () => {
+  test("StockReport leads with the breakout verdict and the level", async () => {
     report.mockReturnValueOnce({ status: 200, body: breakout });
     renderReport("DIVISLAB", "2024-09-10");
     expect(await screen.findByRole("heading", { name: "DIVISLAB" })).toBeInTheDocument();
     expect(screen.getByText("as of 2024-09-10")).toBeInTheDocument();
-    expect(screen.getByText(/Breakout level 4,105.20 \(set 2021-10-25\)/)).toBeInTheDocument();
+    const verdict = screen.getByTestId("verdict");
+    expect(verdict).toHaveTextContent(
+      "Breaking out: closed at ₹4,300.00, 4.75% above its 3-year high of ₹4,105.20 (set 2021-10-25).",
+    );
+    expect(screen.getByText("1 of 1 conditions pass")).toBeInTheDocument();
     expect(report).toHaveBeenCalledWith("DIVISLAB", { as_of: "2024-09-10" });
     const chart = await screen.findByTestId("chart");
     expect(chart).toHaveAttribute("data-level", "4105.2");
@@ -152,7 +157,7 @@ describe("StockReport", () => {
     report.mockReturnValueOnce({ status: 200, body: breakout });
     const onChange = vi.fn();
     renderReport("DIVISLAB", undefined, undefined, onChange);
-    await screen.findByText("✅");
+    await screen.findByText("Pass");
     expect(report).toHaveBeenCalledWith("DIVISLAB", {});
     fireEvent.click(screen.getByRole("button", { name: "Weekly" }));
     expect(onChange).toHaveBeenCalledWith("weekly");

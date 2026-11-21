@@ -7,8 +7,10 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
+import { useMemo } from "react";
 import type { Match } from "@/api/client";
 import { formatAgeShort, formatPrice, formatSignedPct } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -85,13 +87,26 @@ const provisionalColumn = helper.accessor((m) => (m.provisional ? (m.provisional
   cell: (c) => {
     const p = c.row.original.provisional;
     if (!p) return dash;
-    return p.evaluable ? `${p.pass ? "✅" : "❌"} provisional` : "not evaluable";
+    return p.evaluable ? `${p.pass ? "Passes" : "Fails"} so far` : "not evaluable";
   },
 });
 
-// Stable column sets (module scope, as Table v9 asks); the weekly one adds the week in progress.
-const dailyColumns = helper.columns([...baseColumns]);
-const weeklyColumns = helper.columns([...baseColumns, provisionalColumn]);
+/** Columns that only some scans fill (a one-pattern scan has no volume or RS); hidden when every match lacks them. */
+const optional: Record<string, (m: Match) => unknown> = {
+  level: (m) => m.level,
+  level_date: (m) => m.level_date,
+  level_age: (m) => m.level_date,
+  pct_above: (m) => m.pct_above,
+  vol_ratio: (m) => m.vol_ratio,
+  rs_diff: (m) => m.rs_diff,
+};
+// Every column, in display order; each table keeps the ones its matches fill.
+const allColumns = [...baseColumns, provisionalColumn];
+const columnId = (c: (typeof allColumns)[number]) =>
+  (c as { id?: string }).id ?? (c as { accessorKey?: string }).accessorKey ?? "";
+
+/** Columns aligned right: numbers, so digits line up. */
+const numericIds = new Set(["level", "level_age", "pct_above", "vol_ratio", "rs_diff"]);
 
 /** "pct_above" ↔ [{id: "pct_above", desc: false}], "-pct_above" ↔ desc. */
 export function parseSort(sort: string | undefined): SortingState {
@@ -121,7 +136,18 @@ export function MatchTable({
   onOpen: (symbol: string) => void;
 }) {
   const withProvisional = matches.some((m) => m.provisional !== undefined);
-  const cols = withProvisional ? weeklyColumns : dailyColumns;
+  const present = Object.keys(optional).filter((id) => matches.some((m) => optional[id]!(m) !== undefined));
+  const shape = `${present.join(",")}|${withProvisional}`;
+  // Rebuilt only when the set of filled columns changes, so the table keeps stable column defs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: shape encodes present and withProvisional
+  const cols = useMemo(() => {
+    const kept = allColumns.filter((c) => {
+      const id = columnId(c);
+      if (id === "provisional") return withProvisional;
+      return !(id in optional) || present.includes(id);
+    });
+    return helper.columns(kept);
+  }, [shape]);
   const sorting = parseSort(sort);
   const table = useTable({
     features,
@@ -145,7 +171,10 @@ export function MatchTable({
                 return (
                   <th
                     key={header.id}
-                    className="px-2 py-2 font-medium whitespace-nowrap"
+                    className={cn(
+                      "text-muted-foreground px-2 py-2 font-medium whitespace-nowrap",
+                      numericIds.has(header.column.id) && "text-right",
+                    )}
                     aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"}
                   >
                     <button
@@ -173,10 +202,10 @@ export function MatchTable({
             >
               {row.getAllCells().map((cell) =>
                 cell.column.id === "symbol" ? (
-                  <td key={cell.id} className="px-2 py-1.5 font-medium">
+                  <td key={cell.id} className="px-2 py-2 font-semibold">
                     <button
                       type="button"
-                      className="hover:underline"
+                      className="decoration-muted-foreground hover:decoration-foreground underline underline-offset-4"
                       onClick={(e) => {
                         e.stopPropagation();
                         onOpen(row.original.symbol);
@@ -186,7 +215,14 @@ export function MatchTable({
                     </button>
                   </td>
                 ) : (
-                  <td key={cell.id} className="px-2 py-1.5 tabular-nums whitespace-nowrap">
+                  <td
+                    key={cell.id}
+                    className={cn(
+                      "px-2 py-2 tabular-nums whitespace-nowrap",
+                      numericIds.has(cell.column.id) && "text-right",
+                      cell.column.id === "level" && "text-level",
+                    )}
+                  >
                     <table.FlexRender cell={cell} />
                   </td>
                 ),

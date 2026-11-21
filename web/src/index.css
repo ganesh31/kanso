@@ -3,54 +3,63 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn/ui neutral theme. Kanso is dark by default (<html class="dark">). */
+/*
+ * Kanso's palette: aizome indigo ink and washi paper. Kincha gold means one thing only, the
+ * breakout level (the chart's level line, level prices, old highs). Matcha and beni are the
+ * pass/fail pair, shared by verdicts, returns and candles. Dark is the default (<html class="dark">);
+ * :root is the light fallback.
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --pass: oklch(0.6 0.15 150);
-  --level: oklch(0.75 0.15 75);
+  --radius: 0.375rem;
+  --background: #f4f1e8;
+  --foreground: #16213a;
+  --card: #fbf9f3;
+  --card-foreground: #16213a;
+  --primary: #1f2f52;
+  --primary-foreground: #f4f1e8;
+  --secondary: #e6e1d3;
+  --secondary-foreground: #16213a;
+  --muted: #e6e1d3;
+  --muted-foreground: #56607a;
+  --accent: #e6e1d3;
+  --accent-foreground: #16213a;
+  --destructive: #b8453b;
+  --border: #d6d0bf;
+  --input: #c9c2ae;
+  --ring: #1f2f52;
+  --pass: #2f7d55;
+  --fail: #b8453b;
+  --level: #a56c0c;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --pass: oklch(0.72 0.17 150);
-  --level: oklch(0.8 0.15 75);
+  --background: #131d33;
+  --foreground: #ece8de;
+  --card: #1a2742;
+  --card-foreground: #ece8de;
+  --primary: #ece8de;
+  --primary-foreground: #131d33;
+  --secondary: #22314f;
+  --secondary-foreground: #ece8de;
+  --muted: #22314f;
+  --muted-foreground: #a3adc2;
+  --accent: #22314f;
+  --accent-foreground: #ece8de;
+  --destructive: #e5746a;
+  --border: #2e3f62;
+  --input: #3a4d74;
+  --ring: #a3adc2;
+  --pass: #79c49a;
+  --fail: #e5746a;
+  --level: #e3a63b;
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --font-sans: "Atkinson Hyperlegible Next Variable", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -68,6 +77,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-pass: var(--pass);
+  --color-fail: var(--fail);
   --color-level: var(--level);
 }
 
@@ -75,7 +85,30 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    color-scheme: dark;
+  }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+    font-feature-settings: "tnum" 1;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
   }
 }

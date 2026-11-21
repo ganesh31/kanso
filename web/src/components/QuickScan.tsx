@@ -75,7 +75,8 @@ function SaveAsSystem({
     }
   };
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 border-t pt-4">
+      <p className="text-muted-foreground text-sm">Keep this scan to rerun it from the Saved system tab.</p>
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
@@ -146,7 +147,7 @@ export function QuickScan({
     <div className="flex flex-col gap-6">
       <Card>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-wrap items-start gap-4">
             <PatternPicker
               patterns={patterns}
               value={pattern}
@@ -212,6 +213,7 @@ export function QuickScan({
           sort={search.sort}
           onSortChange={(sort) => onSearchChange({ ...search, sort })}
           onOpen={onOpenReport}
+          footer={<SaveAsSystem request={request} autoInserted={scan.data.auto_inserted} onSaved={onSaved} />}
         >
           {scan.data.auto_inserted.map((type) => {
             const inserted = patterns.find((p) => p.type === type);
@@ -223,7 +225,6 @@ export function QuickScan({
               </p>
             );
           })}
-          <SaveAsSystem request={request} autoInserted={scan.data.auto_inserted} onSaved={onSaved} />
         </ScanResults>
       )}
     </div>
