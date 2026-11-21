@@ -100,11 +100,15 @@ func TestNYearHighWindowDropsOldestBar(t *testing.T) {
 	}
 }
 
-// weeklySeries resamples n weeks of Mon–Fri daily bars (from Mon
-// 2024-01-01) to weekly, plus one Monday so the last full week is complete.
-// Every daily bar has high 100 and close 99 except where weekHigh sets a
-// whole week's high.
+// weeklySeries resamples dailyWeeks(n, weekHigh) to weekly.
 func weeklySeries(n int, weekHigh map[int]float64) *market.Series {
+	return market.ToWeekly(dailyWeeks(n, weekHigh))
+}
+
+// dailyWeeks is n weeks of Mon–Fri daily bars from Mon 2024-01-01, plus
+// one Monday so the last full week is complete. Every bar has high 100 and
+// close 99 except where weekHigh sets a whole week's high.
+func dailyWeeks(n int, weekHigh map[int]float64) *market.Series {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	var bars []market.Bar
 	for w := 0; w <= n; w++ {
@@ -121,7 +125,7 @@ func weeklySeries(n int, weekHigh map[int]float64) *market.Series {
 			bars = append(bars, market.Bar{Date: dt, Open: 99, High: h, Low: 99, Close: 99, Volume: 1000})
 		}
 	}
-	return market.ToWeekly(market.NewDaily(market.Instrument{ID: 1, Symbol: "TEST"}, bars))
+	return market.NewDaily(market.Instrument{ID: 1, Symbol: "TEST"}, bars)
 }
 
 func TestNYearHighWeeklyUses52PerYear(t *testing.T) {
