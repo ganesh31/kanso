@@ -140,6 +140,7 @@ function renderPanel() {
 
 describe("BacktestPanel", () => {
   beforeEach(() => {
+    localStorage.clear();
     backtest.mockReset();
     backtest.mockReturnValue(json(200, result));
     configureApi({
@@ -196,6 +197,17 @@ describe("BacktestPanel", () => {
     expect(await screen.findByText(/crowded days ranked by 6-month RS, then symbol/)).toBeInTheDocument();
     expect(screen.getByText(/1 signal skipped: price above slot size \(MRF 2024-03-04\)/)).toBeInTheDocument();
     expect(screen.getByText(/1 signal skipped: insufficient cash \(HDFCBANK 2014-05-12\)/)).toBeInTheDocument();
+  });
+
+  test("honesty panel beside the results counts each backtest's parameter set once", async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    const panel = await screen.findByRole("complementary", { name: "How this was tested" });
+    expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent("1");
+    expect(within(panel).getByText(/survivorship bias/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Backtest" }));
+    await waitFor(() => expect(backtest).toHaveBeenCalledTimes(2));
+    expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent("1");
   });
 
   test("lists every trade with its exit reason", async () => {

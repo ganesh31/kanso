@@ -4,18 +4,19 @@ import {
   useGetDefaultSystem,
   useListPatterns,
   type Condition,
-  type Honesty,
   type PortfolioStats,
   type Trade,
   type TradeStats,
 } from "@/api/client";
 import { useState } from "react";
 import { EquityChart } from "@/components/EquityChart";
+import { HonestyPanel } from "@/components/HonestyPanel";
 import { exitLabel, TradeChart } from "@/components/TradeChart";
 import { describeRule } from "@/components/EvidenceList";
 import { Button } from "@/components/ui/button";
 import { formatPrice, formatSignedPct, humanize } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { recordVariation } from "@/state/variations";
 
 /** A condition as its registry label and the rule its params set, e.g. "Volume surge: needs volume at least 2×…". */
 function ConditionItem({ c, labels }: { c: Condition; labels: Map<string, string> }) {
@@ -111,27 +112,8 @@ function PortfolioTiles({ stats }: { stats: PortfolioStats }) {
   );
 }
 
-const SKIP_REASONS: Record<string, string> = {
-  price_above_slot: "price above slot size",
-  insufficient_cash: "insufficient cash",
-};
-const SKIPPED_SHOWN = 5;
-
-/** "1 signal skipped: price above slot size (MRF 2024-03-04)", one line per reason. */
-function skippedSignalLines(h: Honesty): string[] {
-  const byReason = new Map<string, string[]>();
-  for (const s of h.skipped_signals) {
-    const list = byReason.get(s.reason);
-    if (list) list.push(`${s.symbol} ${s.entry_date}`);
-    else byReason.set(s.reason, [`${s.symbol} ${s.entry_date}`]);
-  }
-  return [...byReason].map(([reason, list]) => {
-    const shown = list.slice(0, SKIPPED_SHOWN).join(", ");
-    const more = list.length > SKIPPED_SHOWN ? ` and ${list.length - SKIPPED_SHOWN} more` : "";
-    const noun = list.length === 1 ? "signal" : "signals";
-    return `${list.length} ${noun} skipped: ${SKIP_REASONS[reason] ?? reason} (${shown}${more})`;
-  });
-}
+/** The draft id the unsaved default system counts its variations under. */
+const DEFAULT_DRAFT = "default";
 
 const TRADES_SHOWN = 25;
 
@@ -206,6 +188,7 @@ export function BacktestPanel() {
   const run = useBacktest();
   const patterns = useListPatterns({ query: { select: (b) => b.patterns } });
   const labels = new Map((patterns.data ?? []).map((p) => [p.type, p.label]));
+  const [variations, setVariations] = useState(0);
 
   if (def.isPending) return <p className="text-muted-foreground">Loading the default system…</p>;
   if (def.isError)
@@ -243,7 +226,15 @@ export function BacktestPanel() {
           </p>
         ) : null}
         <div>
-          <Button onClick={() => run.mutate({ data: system })} disabled={run.isPending}>
+          <Button
+            onClick={() =>
+              run.mutate(
+                { data: system },
+                { onSuccess: () => setVariations(recordVariation(system.id ?? DEFAULT_DRAFT, system)) },
+              )
+            }
+            disabled={run.isPending}
+          >
             Backtest
           </Button>
         </div>
@@ -265,35 +256,26 @@ export function BacktestPanel() {
         </div>
       ) : null}
       {run.isSuccess ? (
-        <section className="flex flex-col gap-8">
-          <div className="flex flex-col gap-3">
-            <h3 className="text-lg font-bold">Portfolio</h3>
-            <PortfolioTiles stats={run.data.portfolio} />
-            <EquityChart equity={run.data.equity} benchmark={run.data.benchmark} />
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <section aria-label="Results" className="flex min-w-0 flex-col gap-8">
+            <div className="flex flex-col gap-3">
+              <h3 className="text-lg font-bold">Portfolio</h3>
+              <PortfolioTiles stats={run.data.portfolio} />
+              <EquityChart equity={run.data.equity} benchmark={run.data.benchmark} />
+            </div>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-lg font-bold">Every signal</h3>
+              <p className="text-muted-foreground -mt-2 text-sm">
+                Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
+              </p>
+              <TradeTiles stats={run.data.trade_stats} />
+              <TradeList trades={run.data.trades} />
+            </div>
+          </section>
+          <div className="lg:sticky lg:top-6">
+            <HonestyPanel honesty={run.data.honesty} variations={variations} />
           </div>
-          <div className="text-muted-foreground flex flex-col gap-1 border-l-2 pl-4 text-sm">
-            <h3 className="text-foreground font-semibold">How this was tested</h3>
-            <p>
-              Fills at the {run.data.honesty.fill_model}; costs {run.data.honesty.per_side_pct}% and slippage{" "}
-              {run.data.honesty.slippage_pct}% per side. Data {run.data.honesty.data_start} to{" "}
-              {run.data.honesty.data_end}
-              {run.data.honesty.survivorship ? "; today's stock list only (survivorship bias)" : ""}
-              {run.data.honesty.skipped.length > 0 ? `; ${run.data.honesty.skipped.length} stocks with no data` : ""}.
-              Portfolio: {run.data.honesty.ranking_rule}.
-            </p>
-            {skippedSignalLines(run.data.honesty).map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </div>
-          <div className="flex flex-col gap-3">
-            <h3 className="text-lg font-bold">Every signal</h3>
-            <p className="text-muted-foreground -mt-2 text-sm">
-              Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
-            </p>
-            <TradeTiles stats={run.data.trade_stats} />
-            <TradeList trades={run.data.trades} />
-          </div>
-        </section>
+        </div>
       ) : null}
     </div>
   );
