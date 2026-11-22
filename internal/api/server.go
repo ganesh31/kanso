@@ -29,6 +29,17 @@ type Config struct {
 	// MaxBars caps the bars one /api/bars response serves (spec §6.4);
 	// 0 means DefaultMaxBars.
 	MaxBars int
+	// Demo runs the public demo (spec §6.4): saved-system writes return
+	// 403, and the computation and bars endpoints are rate-limited per
+	// client IP.
+	Demo bool
+	// RateLimit is the demo's per-IP limit in requests a minute across
+	// backtest, scan, quickscan, report and bars; 0 means DefaultRateLimit.
+	// It has no effect outside demo mode.
+	RateLimit int
+
+	// now is the rate limiter's clock; nil means time.Now.
+	now func() time.Time
 }
 
 // DefaultMaxBars is the /api/bars cap when Config.MaxBars is 0.
@@ -57,6 +68,13 @@ func New(prov market.Provider, systems SystemStore, cfg Config) http.Handler {
 	maxBars := cfg.MaxBars
 	if maxBars <= 0 {
 		maxBars = DefaultMaxBars
+	}
+	if cfg.Demo {
+		limit := cfg.RateLimit
+		if limit <= 0 {
+			limit = DefaultRateLimit
+		}
+		api.UseMiddleware(refuseSystemWrites(api), limitRate(api, newLimiter(limit, cfg.now)))
 	}
 	register(api, &handlers{prov: prov, systems: systems, maxBars: maxBars})
 	mux.Handle("/", spa(cfg.Static))
@@ -148,6 +166,7 @@ func logRequests(log *slog.Logger, next http.Handler) http.Handler {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 		log.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status,
+			"ip", clientIP(r.Header.Get("X-Forwarded-For"), r.RemoteAddr),
 			"duration_ms", time.Since(start).Milliseconds())
 	})
 }

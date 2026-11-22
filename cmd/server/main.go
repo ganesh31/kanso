@@ -1,6 +1,7 @@
 // Command server runs the Kanso HTTP API and serves the web app.
 //
-//	server -db kanso.db [-addr :8080] [-web web/dist]
+//	server -db kanso.db [-addr 127.0.0.1:8080] [-web web/dist]
+//	server -db demo.db -demo -addr :${PORT}
 //	server -dump-openapi > api/openapi.json
 package main
 
@@ -18,6 +19,7 @@ import (
 
 	"kanso/internal/api"
 	"kanso/internal/data"
+	"kanso/internal/webui"
 )
 
 func main() {
@@ -29,8 +31,10 @@ func main() {
 
 func run() error {
 	dbPath := flag.String("db", "", "SQLite database written by cmd/ingest (saved systems are written to it)")
-	addr := flag.String("addr", "127.0.0.1:8080", "listen address (localhost only by default: saved systems are writable without auth)")
-	webDir := flag.String("web", "web/dist", "directory of the built web app (empty: none)")
+	addr := flag.String("addr", "127.0.0.1:8080", "listen address, with $VARS expanded, e.g. :${PORT} (localhost only by default: saved systems are writable without auth)")
+	webDir := flag.String("web", "", "serve the web app from this directory instead of the one embedded in the binary")
+	demo := flag.Bool("demo", false, "public demo: open the database read-only, refuse saved-system writes and rate-limit per IP")
+	rateLimit := flag.Int("rate-limit", api.DefaultRateLimit, "demo only: requests a minute per IP to backtest, scan, quickscan, report and bars")
 	dump := flag.Bool("dump-openapi", false, "print the OpenAPI spec as JSON and exit")
 	flag.Parse()
 
@@ -47,22 +51,29 @@ func run() error {
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	prov, err := data.Open(*dbPath, false)
+	prov, err := data.Open(*dbPath, *demo)
 	if err != nil {
 		return err
 	}
 	defer prov.Close()
-	log.Info("opened database", "file", *dbPath)
+	log.Info("opened database", "file", *dbPath, "read_only", *demo)
 
-	cfg := api.Config{Logger: log}
+	cfg := api.Config{Logger: log, Demo: *demo, RateLimit: *rateLimit, Static: webui.FS()}
 	if *webDir != "" {
-		if st, err := os.Stat(*webDir); err == nil && st.IsDir() {
-			cfg.Static = os.DirFS(*webDir)
-		} else {
-			log.Warn("web app not found; serving the API only", "dir", *webDir)
+		st, err := os.Stat(*webDir)
+		if err != nil || !st.IsDir() {
+			return fmt.Errorf("-web %s: not a directory", *webDir)
 		}
+		cfg.Static = os.DirFS(*webDir)
+	}
+	if cfg.Static == nil {
+		log.Warn("no web app embedded (build with make build); serving the API only")
+	}
+	if *demo {
+		log.Info("demo mode", "rate_limit_per_min", *rateLimit)
 	}
 
+	*addr = listenAddr(*addr)
 	srv := &http.Server{Addr: *addr, Handler: api.New(prov, api.StoreSystems{S: prov}, cfg), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -78,3 +89,7 @@ func run() error {
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
 }
+
+// listenAddr expands environment variables in the -addr flag, so the
+// container (which has no shell) can listen on :${PORT} as Cloud Run sets it.
+func listenAddr(flag string) string { return os.ExpandEnv(flag) }

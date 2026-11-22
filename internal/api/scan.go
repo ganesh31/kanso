@@ -25,7 +25,7 @@ func registerScan(api huma.API, h *handlers) {
 		Method:      http.MethodPost,
 		Path:        "/api/quickscan",
 		Summary:     "Scan a stock list for one pattern or filter",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusTooManyRequests},
 	}, h.quickscan)
 	huma.Register(api, huma.Operation{
 		OperationID: "validate-system",

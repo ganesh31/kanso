@@ -23,7 +23,7 @@ func registerBacktest(api huma.API, h *handlers) {
 		Method:      http.MethodPost,
 		Path:        "/api/backtest",
 		Summary:     "Backtest a system over its stock list",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusTooManyRequests},
 	}, h.backtest)
 }
 

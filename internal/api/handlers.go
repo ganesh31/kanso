@@ -33,14 +33,14 @@ func register(api huma.API, h *handlers) {
 		Method:      http.MethodPost,
 		Path:        "/api/report/{symbol}",
 		Summary:     "Evaluate every pattern on one stock",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusTooManyRequests},
 	}, h.report)
 	huma.Register(api, huma.Operation{
 		OperationID: "get-bars",
 		Method:      http.MethodGet,
 		Path:        "/api/bars/{symbol}",
 		Summary:     "One symbol's bars for one chart, at most the bar limit",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusTooManyRequests},
 	}, h.bars)
 	registerScan(api, h)
 	registerSystems(api, h)
