@@ -34,3 +34,7 @@ web/playwright-report/
 # Local tool output
 .playwright-mcp/
 .claude/worktrees/
+
+# Built web app copied in for go:embed (make embed-web)
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep

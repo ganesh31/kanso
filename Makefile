@@ -1,4 +1,4 @@
-.PHONY: test test-web lint sqlc api check-api benchmark web e2e demo-snapshot build run
+.PHONY: test test-web lint sqlc api check-api benchmark web e2e demo-snapshot build embed-web run
 
 export CGO_ENABLED = 0
 
@@ -27,10 +27,16 @@ check-api: api
 web:
 	cd web && pnpm install --frozen-lockfile && pnpm build
 
-build:
-	go build -trimpath -o bin/server ./cmd/server
+# Build the web app, embed it (internal/webui/dist) and build the Go binaries into bin/.
+build: web embed-web
+	go build -trimpath -o bin/ ./cmd/...
 
-# Serve the API and built web app on 127.0.0.1:8080 from an ingested database: make run DB=kanso.db
+# Copy the built web app into the Go embed directory, keeping its placeholder.
+embed-web:
+	find internal/webui/dist -mindepth 1 ! -name .gitkeep -delete
+	cp -R web/dist/. internal/webui/dist/
+
+# Serve the API and the embedded web app on 127.0.0.1:8080 from an ingested database: make run DB=kanso.db
 run: build
 	./bin/server -db $(DB)
 
