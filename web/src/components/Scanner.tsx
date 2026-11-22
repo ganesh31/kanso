@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useRef } from "react";
-import type { Timeframe } from "@/api/client";
+import type { System, Timeframe } from "@/api/client";
 import { SegmentedTrack, segmentClass } from "@/components/ui/segmented";
 import type { ScannerSearch } from "@/lib/scannerSearch";
 import { QuickScan } from "./QuickScan";
@@ -25,10 +25,12 @@ export function Scanner({
   search,
   onSearchChange,
   onOpenReport,
+  onOpenBuilder,
 }: {
   search: ScannerSearch;
   onSearchChange: (next: ScannerSearch) => void;
   onOpenReport: (symbol: string, tf: Timeframe) => void;
+  onOpenBuilder: (system: System) => void;
 }) {
   const tab = tabOf(search);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -86,6 +88,7 @@ export function Scanner({
             search={search}
             onSearchChange={onSearchChange}
             onOpenReport={onOpenReport}
+            onOpenBuilder={onOpenBuilder}
             onSaved={(id) => onSearchChange({ tab: "saved", system: id, mode: search.mode })}
           />
         )}

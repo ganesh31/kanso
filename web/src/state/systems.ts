@@ -2,12 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import {
   type ApiError,
-  createSystem,
-  deleteSystem,
   getListSystemsQueryKey,
   type System,
-  updateSystem,
+  useCreateSystem,
+  useDeleteSystem,
   useListSystems,
+  useUpdateSystem,
 } from "@/api/client";
 
 export interface SavedSystems {
@@ -24,25 +24,21 @@ export interface SavedSystems {
 export function useSystems(): SavedSystems {
   const queryClient = useQueryClient();
   const list = useListSystems({ query: { select: (b) => b.systems } });
+  // Each write refreshes the list before it resolves, so a caller sees its change on return.
+  const refresh = { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListSystemsQueryKey() }) };
+  const { mutateAsync: create } = useCreateSystem({ mutation: refresh });
+  const { mutateAsync: update } = useUpdateSystem({ mutation: refresh });
+  const { mutateAsync: del } = useDeleteSystem({ mutation: refresh });
 
-  const refresh = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: getListSystemsQueryKey() }),
-    [queryClient],
-  );
   const save = useCallback(
-    async (system: System) => {
-      const saved = system.id ? await updateSystem(system.id, system) : await createSystem(system);
-      await refresh();
-      return saved;
-    },
-    [refresh],
+    (system: System) => (system.id ? update({ id: system.id, data: system }) : create({ data: system })),
+    [create, update],
   );
   const remove = useCallback(
     async (id: string) => {
-      await deleteSystem(id);
-      await refresh();
+      await del({ id });
     },
-    [refresh],
+    [del],
   );
 
   return { systems: list.data ?? [], isLoading: list.isLoading, error: list.error, save, remove };
