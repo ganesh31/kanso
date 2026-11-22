@@ -39,5 +39,11 @@ run: build
 sqlc:
 	sqlc generate -f internal/data/sqlc.yaml
 
-benchmark e2e demo-snapshot:
+# Ingest the demo's frozen Nifty 50 (deploy/nifty50.csv) plus ^NSEI from Yahoo
+# into deploy/demo.db, then vacuum it into one rollback-journal file for the image.
+demo-snapshot:
+	rm -f deploy/demo.db deploy/demo.db-wal deploy/demo.db-shm
+	go run ./cmd/ingest -db deploy/demo.db -universe NIFTY50 -constituents deploy/nifty50.csv -compact
+
+benchmark e2e:
 	@echo "make $@: not implemented yet (later V1 ticket)"; exit 1

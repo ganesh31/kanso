@@ -2,7 +2,10 @@
 // Yahoo into the SQLite store. It runs as its own process; the server can
 // keep reading the database meanwhile (WAL).
 //
-//	ingest -db kanso.db -universe NIFTY500 -constituents ind_nifty500list.csv [-from 2005-01-01] [-to YYYY-MM-DD]
+//	ingest -db kanso.db -universe NIFTY500 -constituents ind_nifty500list.csv [-from 2005-01-01] [-to YYYY-MM-DD] [-compact]
+//
+// -compact leaves one vacuumed rollback-journal file for the demo image
+// (make demo-snapshot).
 package main
 
 import (
@@ -34,6 +37,7 @@ func run() error {
 	constituents := flag.String("constituents", "", "NSE constituents CSV (niftyindices.com) with a Symbol column")
 	from := flag.String("from", "2005-01-01", "first date to fetch (YYYY-MM-DD)")
 	to := flag.String("to", "", "last date to fetch (default: today in IST)")
+	compact := flag.Bool("compact", false, "after the backfill, vacuum into one rollback-journal file (the demo snapshot)")
 	flag.Parse()
 	if *dbPath == "" || *universe == "" || *constituents == "" {
 		return errors.New("-db, -universe and -constituents are required")
@@ -76,5 +80,15 @@ func run() error {
 	if sum.TooManyFailures() {
 		return fmt.Errorf("%d of %d symbols failed (more than 5%%)", len(sum.Failed), sum.Instruments)
 	}
+	if !*compact {
+		return nil
+	}
+	if err := st.Close(); err != nil {
+		return err
+	}
+	if err := data.Compact(*dbPath); err != nil {
+		return err
+	}
+	log.Info("compacted", "file", *dbPath)
 	return nil
 }
