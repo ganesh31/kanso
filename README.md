@@ -116,7 +116,15 @@ For web development, run the server as above and `cd web && pnpm install && pnpm
 
 Ingest is its own process, so it can write while the server reads (SQLite WAL). For personal use it runs from launchd on weekdays at 18:30 IST, after the NSE close, and again at 08:00 IST the next morning only if some instruments are still behind the benchmark, because Yahoo can lag a day. Each run records every instrument's latest bar date and prints "data as of <date>; N instruments behind". After a split or bonus, Yahoo rescales the whole history, so the update re-fetches that symbol in full.
 
-_Status: today `cmd/ingest` does a full backfill (re-run it to refresh). The incremental `-update` mode and the launchd plist land with issue #13._
+```sh
+# Fetch each symbol from its last stored date minus 10 days. A split in that window,
+# or a stored close that moved more than 0.5%, re-fetches the symbol's full history.
+go run ./cmd/ingest -db kanso.db -universe NIFTY50 -constituents ind_nifty50list.csv -update
+# The morning run: does nothing unless the data is behind.
+go run ./cmd/ingest -db kanso.db -universe NIFTY50 -constituents ind_nifty50list.csv -update -only-if-behind
+```
+
+Example launchd jobs for both runs are in [`deploy/launchd/`](deploy/launchd/); edit their paths before loading them. A full backfill (without `-update`) replaces each symbol's stored history with what it fetched, so re-running it with a later `-from` drops the older bars.
 
 ## Tests
 
