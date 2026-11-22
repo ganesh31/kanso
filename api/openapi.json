@@ -832,6 +832,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "level": {
+            "description": "Breakout level at the signal bar; absent when the rule has none",
+            "format": "double",
+            "type": "number"
+          },
+          "level_date": {
+            "description": "Date the breakout level was set",
+            "format": "date",
+            "type": "string"
+          },
           "quantity": {
             "description": "Whole shares bought",
             "format": "int64",
@@ -1262,6 +1272,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "level": {
+            "description": "Breakout level at the signal bar; absent when the rule has none",
+            "format": "double",
+            "type": "number"
+          },
+          "level_date": {
+            "description": "Date the breakout level was set",
+            "format": "date",
+            "type": "string"
+          },
           "return_pct": {
             "description": "Per-share return in percent, net of costs and slippage",
             "format": "double",
@@ -1495,12 +1515,12 @@
             }
           },
           {
-            "description": "First date (inclusive); default: the first bar",
+            "description": "First date (inclusive); default: as far back as the bar limit allows",
             "explode": false,
             "in": "query",
             "name": "from",
             "schema": {
-              "description": "First date (inclusive); default: the first bar",
+              "description": "First date (inclusive); default: as far back as the bar limit allows",
               "format": "date",
               "type": "string"
             }
@@ -1513,6 +1533,21 @@
             "schema": {
               "description": "Last date (inclusive); default: the last bar",
               "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "weekly: ISO-week bars built from the daily bars in the range, dated by their last day",
+            "explode": false,
+            "in": "query",
+            "name": "timeframe",
+            "schema": {
+              "default": "daily",
+              "description": "weekly: ISO-week bars built from the daily bars in the range, dated by their last day",
+              "enum": [
+                "daily",
+                "weekly"
+              ],
               "type": "string"
             }
           }
@@ -1569,7 +1604,7 @@
             "description": "Internal Server Error"
           }
         },
-        "summary": "Daily bars for one chart"
+        "summary": "One symbol's bars for one chart, at most the bar limit"
       }
     },
     "/api/default-system": {

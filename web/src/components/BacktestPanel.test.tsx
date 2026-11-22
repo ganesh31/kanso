@@ -12,6 +12,17 @@ vi.mock("./EquityChart", () => ({
   ),
 }));
 
+vi.mock("./PriceChart", () => ({
+  PriceChart: ({ bars, level, markers }: { bars: unknown[]; level?: number; markers?: unknown[] }) => (
+    <div
+      data-testid="price-chart"
+      data-bars={bars.length}
+      data-level={level ?? ""}
+      data-markers={JSON.stringify(markers ?? [])}
+    />
+  ),
+}));
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -45,6 +56,8 @@ const result: BacktestResult = {
       gapped_stop: true,
       return_pct: -8.39,
       holding_days: 17,
+      level: 4050,
+      level_date: "2022-01-17",
     },
     {
       symbol: "INFY",
@@ -103,6 +116,18 @@ const result: BacktestResult = {
 };
 
 const backtest = vi.fn<(body: unknown) => Response>();
+const tcsBars = ["2024-02-06", "2024-02-07", "2024-02-08", "2024-03-01", "2024-03-04"].map((date) => ({
+  date,
+  open: 4100,
+  high: 4150,
+  low: 4000,
+  close: 4120,
+  volume: 1000,
+}));
+const bars = vi.fn((url: string) => {
+  const symbol = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+  return json(200, { symbol, bars: symbol === "TCS" ? tcsBars : [] });
+});
 
 function renderPanel() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -125,6 +150,7 @@ describe("BacktestPanel", () => {
         const path = new URL(req.url).pathname;
         if (path === "/api/default-system") return json(200, { system });
         if (path === "/api/backtest") return backtest(await req.json());
+        if (path.startsWith("/api/bars/")) return bars(req.url);
         return json(404, { title: "Not Found" });
       },
     });
@@ -195,6 +221,47 @@ describe("BacktestPanel", () => {
     expect(rows[1]).toHaveTextContent("4,105.20");
     expect(rows[2]).toHaveTextContent("INFY");
     expect(rows[2]).toHaveTextContent("open");
+  });
+
+  test("clicking a trade opens chart with entry/exit markers", async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    const table = await screen.findByRole("table", { name: "Trades" });
+    expect(screen.queryByTestId("price-chart")).not.toBeInTheDocument();
+
+    fireEvent.click(within(table).getByRole("button", { name: "Chart the TCS trade entered 2024-02-07" }));
+
+    const chart = await screen.findByRole("figure", { name: "TCS trade chart" });
+    const pc = within(chart).getByTestId("price-chart");
+    await waitFor(() => expect(pc).toHaveAttribute("data-bars", "5"));
+    expect(pc).toHaveAttribute("data-level", "4050");
+    expect(JSON.parse(pc.getAttribute("data-markers") ?? "[]")).toEqual([
+      { date: "2024-02-07", kind: "entry", price: 4105.2 },
+      { date: "2024-03-01", kind: "exit", price: 3776.78 },
+    ]);
+    // One symbol per request, a window around the trade.
+    const url = new URL(bars.mock.calls.at(-1)?.[0] ?? "");
+    expect(url.pathname).toBe("/api/bars/TCS");
+    expect(url.searchParams.get("from")).toBe("2023-02-07");
+    expect(url.searchParams.get("to")).toBe("2024-06-01");
+    expect(chart).toHaveTextContent("Bought 2024-02-07 at 4,105.20");
+    expect(chart).toHaveTextContent("Sold 2024-03-01 at 3,776.78, stop (gapped)");
+    expect(chart).toHaveTextContent("Breakout level 4,050.00, set 2022-01-17");
+
+    fireEvent.click(within(chart).getByRole("button", { name: "Close chart" }));
+    expect(screen.queryByRole("figure", { name: "TCS trade chart" })).not.toBeInTheDocument();
+  });
+
+  test("a trade still open has no exit marker and no level line without a level", async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    const table = await screen.findByRole("table", { name: "Trades" });
+    fireEvent.click(within(table).getByRole("button", { name: "Chart the INFY trade entered 2024-09-03" }));
+    const pc = within(await screen.findByRole("figure", { name: "INFY trade chart" })).getByTestId("price-chart");
+    expect(pc).toHaveAttribute("data-level", "");
+    expect(JSON.parse(pc.getAttribute("data-markers") ?? "[]")).toEqual([
+      { date: "2024-09-03", kind: "entry", price: 1900 },
+    ]);
   });
 
   test("shows a backtest error", async () => {

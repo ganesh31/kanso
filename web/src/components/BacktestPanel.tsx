@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { EquityChart } from "@/components/EquityChart";
 import { HonestyPanel } from "@/components/HonestyPanel";
+import { exitLabel, TradeChart } from "@/components/TradeChart";
 import { describeRule } from "@/components/EvidenceList";
 import { Button } from "@/components/ui/button";
 import { formatPrice, formatSignedPct, humanize } from "@/lib/format";
@@ -114,18 +115,20 @@ function PortfolioTiles({ stats }: { stats: PortfolioStats }) {
 /** The draft id the unsaved default system counts its variations under. */
 const DEFAULT_DRAFT = "default";
 
-function exitLabel(t: Trade): string {
-  return t.exit_reason === "stop" && t.gapped_stop ? "stop (gapped)" : t.exit_reason;
-}
-
 const TRADES_SHOWN = 25;
 
+const tradeKey = (t: Trade) => `${t.symbol}-${t.entry_date}`;
+
+/** Every trade; clicking one opens its chart above the table. */
 function TradeList({ trades }: { trades: Trade[] }) {
   const [all, setAll] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   if (trades.length === 0) return <p className="text-muted-foreground">No trades.</p>;
   const shown = all ? trades : trades.slice(0, TRADES_SHOWN);
+  const charted = trades.find((t) => tradeKey(t) === open);
   return (
     <div className="flex flex-col gap-3">
+      {charted ? <TradeChart key={open} trade={charted} onClose={() => setOpen(null)} /> : null}
       <div className="overflow-x-auto">
         <table aria-label="Trades" className="w-full text-sm">
           <thead className="text-muted-foreground text-left">
@@ -143,8 +146,18 @@ function TradeList({ trades }: { trades: Trade[] }) {
           </thead>
           <tbody className="tabular-nums">
             {shown.map((t) => (
-              <tr key={`${t.symbol}-${t.entry_date}`} className="border-t">
-                <td className="py-1 pr-3 font-medium">{t.symbol}</td>
+              <tr key={tradeKey(t)} className={cn("border-t", tradeKey(t) === open && "bg-muted")}>
+                <td className="py-1 pr-3 font-medium">
+                  <button
+                    type="button"
+                    aria-label={`Chart the ${t.symbol} trade entered ${t.entry_date}`}
+                    aria-pressed={tradeKey(t) === open}
+                    className="hover:text-foreground focus-visible:ring-ring rounded-sm underline decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:outline-none"
+                    onClick={() => setOpen((cur) => (cur === tradeKey(t) ? null : tradeKey(t)))}
+                  >
+                    {t.symbol}
+                  </button>
+                </td>
                 <td className="py-1 pr-3">{t.signal_date}</td>
                 <td className="py-1 pr-3">{t.entry_date}</td>
                 <td className="py-1 pr-3 text-right">{formatPrice(t.entry_price)}</td>

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -16,6 +17,8 @@ import (
 type handlers struct {
 	prov    market.Provider
 	systems SystemStore
+	// maxBars caps one /api/bars response.
+	maxBars int
 }
 
 func register(api huma.API, h *handlers) {
@@ -36,7 +39,7 @@ func register(api huma.API, h *handlers) {
 		OperationID: "get-bars",
 		Method:      http.MethodGet,
 		Path:        "/api/bars/{symbol}",
-		Summary:     "Daily bars for one chart",
+		Summary:     "One symbol's bars for one chart, at most the bar limit",
 		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
 	}, h.bars)
 	registerScan(api, h)
@@ -141,14 +144,15 @@ func (h *handlers) report(ctx context.Context, in *ReportInput) (*ReportOutput, 
 	return out, nil
 }
 
-// BarsInput selects one symbol's daily bars.
+// BarsInput selects one symbol's bars in a date range.
 type BarsInput struct {
-	Symbol string      `path:"symbol"`
-	From   market.Date `query:"from" format:"date" doc:"First date (inclusive); default: the first bar"`
-	To     market.Date `query:"to" format:"date" doc:"Last date (inclusive); default: the last bar"`
+	Symbol    string           `path:"symbol"`
+	From      market.Date      `query:"from" format:"date" doc:"First date (inclusive); default: as far back as the bar limit allows"`
+	To        market.Date      `query:"to" format:"date" doc:"Last date (inclusive); default: the last bar"`
+	Timeframe market.Timeframe `query:"timeframe" enum:"daily,weekly" default:"daily" doc:"weekly: ISO-week bars built from the daily bars in the range, dated by their last day"`
 }
 
-// BarsOutput is one symbol's daily bars, ascending by date.
+// BarsOutput is one symbol's bars, ascending by date.
 type BarsOutput struct {
 	Body struct {
 		Symbol string       `json:"symbol"`
@@ -156,6 +160,9 @@ type BarsOutput struct {
 	}
 }
 
+// bars serves one symbol's bars for one chart (spec §6.4): a range with
+// more bars than the limit is a 400, and without from it serves the last
+// limit bars up to to, never the whole history.
 func (h *handlers) bars(ctx context.Context, in *BarsInput) (*BarsOutput, error) {
 	inst, err := h.prov.Instrument(ctx, in.Symbol)
 	if err != nil {
@@ -165,9 +172,25 @@ func (h *handlers) bars(ctx context.Context, in *BarsInput) (*BarsOutput, error)
 	if to == "" {
 		to = "9999-12-31"
 	}
-	bars, err := h.prov.Daily(ctx, inst.ID, in.From, to)
+	if in.From != "" && in.From > to {
+		return nil, huma.Error400BadRequest("from is after to", &huma.ErrorDetail{
+			Message: "must not be after to", Location: "query.from", Value: in.From,
+		})
+	}
+	daily, err := h.prov.Daily(ctx, inst.ID, in.From, to)
 	if err != nil {
 		return nil, mapError(err, in.Symbol)
+	}
+	bars := daily
+	if in.Timeframe == market.Weekly {
+		bars = market.ToWeekly(market.NewDaily(inst, daily)).Bars
+	}
+	if len(bars) > h.maxBars {
+		if in.From != "" {
+			return nil, huma.Error400BadRequest(fmt.Sprintf("range has %d bars, over the %d-bar limit", len(bars), h.maxBars),
+				&huma.ErrorDetail{Message: fmt.Sprintf("at most %d bars per request", h.maxBars), Location: "query.from", Value: in.From})
+		}
+		bars = bars[len(bars)-h.maxBars:]
 	}
 	out := &BarsOutput{}
 	out.Body.Symbol, out.Body.Bars = inst.Symbol, bars
