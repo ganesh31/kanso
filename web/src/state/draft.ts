@@ -47,6 +47,8 @@ export type DraftAction =
   | { type: "setTimeframe"; timeframe: SystemTimeframe }
   | { type: "setUniverse"; universe: string }
   | { type: "setName"; name: string }
+  /** Records the id a save gave the draft, keeping switched-off conditions (which the server doesn't store). */
+  | { type: "setId"; id: string }
   | { type: "load"; system: System };
 
 const toDraftCondition = (c: Condition): DraftCondition => ({ type: c.type, params: { ...c.params } });
@@ -127,9 +129,19 @@ export function systemReducer(d: Draft, a: DraftAction): Draft {
       return { ...d, universe: a.universe };
     case "setName":
       return { ...d, name: a.name };
+    case "setId":
+      return { ...d, id: a.id };
     case "load":
       return fromSystem(a.system);
   }
+}
+
+/**
+ * Which conditions are where, and which are switched on. Field errors are mapped by position, so
+ * they are shown only while this is what it was when the request was sent.
+ */
+export function layoutKey(d: Draft): string {
+  return JSON.stringify([d.all, d.any].map((g) => g.map((c) => [c.type, !c.off])));
 }
 
 /** Plain names for the system-level fields the API can reject. */
