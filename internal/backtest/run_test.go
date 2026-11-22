@@ -146,8 +146,10 @@ func TestRankKeyIgnoresRule(t *testing.T) {
 		{ID: 3, Symbol: market.Benchmark, Type: market.Index},
 	}, map[string][]market.Bar{"AAA": flat, "ZZZ": breakoutBars(60), market.Benchmark: bench},
 		map[string][]string{"TEST": {"AAA", "ZZZ"}})
-	s := rules.System{Name: "no rs", Universe: "TEST", Entry: rules.Entry{All: []rules.Condition{{Type: "n_year_high"}}},
-		Portfolio: rules.Portfolio{MaxPositions: 1}}
+	s := rules.System{
+		Name: "no rs", Universe: "TEST", Entry: rules.Entry{All: []rules.Condition{{Type: "n_year_high"}}},
+		Portfolio: rules.Portfolio{MaxPositions: 1},
+	}
 	res, err := Run(context.Background(), prov, s, "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -234,5 +236,61 @@ func TestRunBenchmarkWithoutBarsUsesStockDates(t *testing.T) {
 	}
 	if res.Honesty.DataStart == "" || res.Honesty.DataStart != res.Equity[0].Date {
 		t.Fatalf("DataStart = %q, want the first simulated date %s", res.Honesty.DataStart, res.Equity[0].Date)
+	}
+}
+
+// historyProvider is a provider whose stock lists have historical
+// membership.
+type historyProvider struct{ *market.MemProvider }
+
+func (p historyProvider) Universe(ctx context.Context, name string) ([]market.Instrument, bool, error) {
+	m, _, err := p.MemProvider.Universe(ctx, name)
+	return m, true, err
+}
+
+func TestRunSurvivorshipFlag(t *testing.T) {
+	res, err := Run(context.Background(), runProvider("2015-01-05"), testSystem(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Honesty.Survivorship {
+		t.Fatal("Survivorship = false for a stock list with no history")
+	}
+	res, err = Run(context.Background(), historyProvider{runProvider("2015-01-05")}, testSystem(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Honesty.Survivorship {
+		t.Fatal("Survivorship = true for a stock list with historical membership")
+	}
+}
+
+func TestRunHonestyFields(t *testing.T) {
+	sys := testSystem()
+	sys.Costs.PerSidePct, sys.Costs.SlippagePct = 0.3, 0.05
+	sys.Portfolio.Capital = 1000 // too small for RW's whole shares: skipped signals
+	res, err := Run(context.Background(), runProvider("2015-06-01"), sys, "2016-01-01", "2020-12-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := res.Honesty
+	if len(h.SkippedSignals) == 0 {
+		t.Fatal("no skipped signals with capital too small for one share")
+	}
+	for _, s := range h.SkippedSignals {
+		if s.Symbol != "RW" || s.Reason == "" || s.EntryDate < "2016-01-01" {
+			t.Fatalf("skipped signal %+v", s)
+		}
+	}
+	h.SkippedSignals = nil
+	want := Honesty{
+		FillModel: "next-day open", PerSidePct: 0.3, SlippagePct: 0.05, Survivorship: true,
+		DataSource: "Yahoo Finance", Adjustment: "split-adjusted, not dividend-adjusted",
+		DataStart: "2016-01-01", DataEnd: "2020-12-31",
+		RankingRule: "crowded days ranked by 6-month RS, then symbol",
+		Skipped:     []SkippedInstrument{{Symbol: "EMPTY", Reason: "no_data"}},
+	}
+	if diff := cmp.Diff(want, h); diff != "" {
+		t.Fatalf("Honesty (-want +got):\n%s", diff)
 	}
 }

@@ -16,47 +16,8 @@ import (
 	"kanso/internal/rules"
 )
 
-// Honesty-panel wording (spec §5.8).
-const (
-	FillModel  = "next-day open"
-	DataSource = "Yahoo Finance"
-	Adjustment = "split-adjusted, not dividend-adjusted"
-)
-
-// Skip reasons for instruments.
-const (
-	SkipNoData = "no_data"
-)
-
 // rankMonths is the RS window that ranks crowded entry days (spec §5.6).
 const rankMonths = 6
-
-// SkippedInstrument is a stock list member the backtest could not use.
-type SkippedInstrument struct {
-	Symbol string
-	Reason string
-}
-
-// Honesty is what the honesty panel shows next to the results (spec §5.8).
-type Honesty struct {
-	FillModel   string
-	PerSidePct  float64
-	SlippagePct float64
-	// Survivorship is true when the stock list is today's members only.
-	Survivorship bool
-	DataSource   string
-	Adjustment   string
-	// DataStart and DataEnd are the window actually used: the start is
-	// the later of the requested start and the benchmark's first date.
-	DataStart market.Date
-	DataEnd   market.Date
-	// RankingRule says how crowded entry days are ranked.
-	RankingRule string
-	Skipped     []SkippedInstrument
-	// SkippedSignals are portfolio candidates with a free slot that could
-	// not buy one whole share, by entry date.
-	SkippedSignals []SkippedSignal
-}
 
 // Result is a backtest's output.
 type Result struct {
@@ -276,18 +237,28 @@ func candidates(sigs []int, ctx *patterns.Context, daily *market.Series, sys *ru
 			continue
 		}
 		tr.RankKey = rankKey(ctx, s)
+		if s < len(ctx.LevelIdx) && ctx.LevelIdx[s] >= 0 {
+			level, date := ctx.Level[s], ctx.Series.Bars[ctx.LevelIdx[s]].Date
+			tr.Level, tr.LevelDate = &level, &date
+		}
 		out = append(out, tr)
 	}
 	return out
 }
 
 // singleStock keeps the candidates a single-stock trader takes: each one
-// whose entry is not before the previous kept trade's exit (spec §5.5).
+// whose entry is not before the previous kept trade's exit (spec §5.5). An
+// entry on the previous trade's exit day is taken only when that exit
+// filled at the open (fillsAtOpen): after an intraday stop the position
+// was still held at the open, where the entry fills.
 func singleStock(cands []Trade) []Trade {
 	out := []Trade{}
 	for _, tr := range cands {
-		if n := len(out); n > 0 && tr.EntryDate < out[n-1].ExitDate {
-			continue
+		if n := len(out); n > 0 {
+			prev := out[n-1]
+			if tr.EntryDate < prev.ExitDate || (tr.EntryDate == prev.ExitDate && !fillsAtOpen(prev)) {
+				continue
+			}
 		}
 		out = append(out, tr)
 	}

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { configureApi, type Meta, type ScanResult } from "@/api/client";
+import { configureApi, type Meta, type ScanResult, type System } from "@/api/client";
 import type { ScannerSearch } from "@/lib/scannerSearch";
 import { QuickScan } from "./QuickScan";
 
@@ -79,24 +79,35 @@ function Harness({
   initial = {},
   onOpen = () => {},
   onSaved = () => {},
+  onOpenBuilder = () => {},
 }: {
   initial?: ScannerSearch;
   onOpen?: (s: string, tf: string) => void;
   onSaved?: (id: string) => void;
+  onOpenBuilder?: (system: System) => void;
 }) {
   const [search, setSearch] = useState<ScannerSearch>(initial);
-  return <QuickScan search={search} onSearchChange={setSearch} onOpenReport={onOpen} onSaved={onSaved} />;
+  return (
+    <QuickScan
+      search={search}
+      onSearchChange={setSearch}
+      onOpenReport={onOpen}
+      onSaved={onSaved}
+      onOpenBuilder={onOpenBuilder}
+    />
+  );
 }
 
 function renderQuickScan(
   initial?: ScannerSearch,
   onOpen?: (s: string, tf: string) => void,
   onSaved?: (id: string) => void,
+  onOpenBuilder?: (system: System) => void,
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <Harness initial={initial} onOpen={onOpen} onSaved={onSaved} />
+      <Harness initial={initial} onOpen={onOpen} onSaved={onSaved} onOpenBuilder={onOpenBuilder} />
     </QueryClientProvider>,
   );
 }
@@ -273,5 +284,23 @@ describe("QuickScan", () => {
   test("save as system needs a name", async () => {
     renderQuickScan({ pattern: "volume_surge", universe: "NIFTY50" });
     expect(await screen.findByRole("button", { name: "Save as system" })).toBeDisabled();
+  });
+
+  test("Open in System Builder passes the draft with the auto-inserted condition first", async () => {
+    quickscan.mockReturnValue({ ...empty, auto_inserted: ["n_year_high"] });
+    const onOpenBuilder = vi.fn();
+    renderQuickScan(
+      { pattern: "not_extended", params: { pct: 5 }, universe: "NIFTY50", tf: "weekly" },
+      undefined,
+      undefined,
+      onOpenBuilder,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Open in System Builder" }));
+    expect(onOpenBuilder).toHaveBeenCalledWith({
+      name: "Not extended",
+      universe: "NIFTY50",
+      timeframe: "weekly",
+      entry: { all: [{ type: "n_year_high" }, { type: "not_extended", params: { pct: 5 } }] },
+    });
   });
 });

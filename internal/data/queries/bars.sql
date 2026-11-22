@@ -24,6 +24,11 @@ SELECT CAST(COALESCE(MAX(date), '') AS TEXT) AS latest
 FROM bars_daily
 WHERE instrument_id = ?;
 
+-- name: EarliestBarDate :one
+SELECT CAST(COALESCE(MIN(date), '') AS TEXT) AS earliest
+FROM bars_daily
+WHERE instrument_id = ?;
+
 -- name: UpsertSplit :exec
 INSERT INTO splits (instrument_id, date, numerator, denominator)
 VALUES (?, ?, ?, ?)

@@ -185,6 +185,48 @@ func TestExportParquetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestImportParquetBuildsStoreAndUniverse(t *testing.T) {
+	ctx := context.Background()
+	src, _ := openTemp(t)
+	tcs, nsei := addInstrument(t, src, "TCS"), addInstrument(t, src, market.Benchmark)
+	if err := src.UpsertBars(ctx, tcs, bars(3, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if err := src.UpsertBars(ctx, nsei, bars(3, 100)); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := src.ExportParquet(ctx, []string{"TCS", market.Benchmark}, "", "9999-12-31", &buf); err != nil {
+		t.Fatal(err)
+	}
+
+	dst, _ := openTemp(t)
+	if err := dst.ImportParquet(ctx, bytes.NewReader(buf.Bytes()), "NIFTY50"); err != nil {
+		t.Fatal(err)
+	}
+	members, _, err := dst.Universe(ctx, "NIFTY50")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0].Symbol != "TCS" || members[0].Type != market.Equity {
+		t.Fatalf("universe members = %+v, want only TCS as an equity", members)
+	}
+	bench, err := dst.Instrument(ctx, market.Benchmark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bench.Type != market.Index {
+		t.Fatalf("benchmark type = %q, want index", bench.Type)
+	}
+	got, err := dst.Daily(ctx, members[0].ID, "", "9999-12-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(bars(3, 10), got); diff != "" {
+		t.Fatalf("TCS bars (-want +got):\n%s", diff)
+	}
+}
+
 func TestWALReaderDuringWrite(t *testing.T) {
 	ctx := context.Background()
 	rw, path := openTemp(t)
@@ -229,7 +271,7 @@ func TestWALReaderDuringWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rtx.Rollback()
+	defer func() { _ = rtx.Rollback() }()
 	var n int
 	if err := rtx.QueryRowContext(ctx, "SELECT count(*) FROM bars_daily").Scan(&n); err != nil {
 		t.Fatal(err)
@@ -282,6 +324,21 @@ func TestLatestBarDate(t *testing.T) {
 	}
 	if d, err := s.LatestBarDate(ctx, id); err != nil || d != b[3].Date {
 		t.Fatalf("got %q, %v; want %s", d, err, b[3].Date)
+	}
+}
+
+func TestEarliestBarDate(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	id := addInstrument(t, s, "TCS")
+	if d, err := s.EarliestBarDate(ctx, id); err != nil || d != "" {
+		t.Fatalf("no bars: %q, %v", d, err)
+	}
+	if err := s.UpsertBars(ctx, id, bars(4, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := s.EarliestBarDate(ctx, id); err != nil || d != "2024-01-01" {
+		t.Fatalf("got %q, %v; want 2024-01-01", d, err)
 	}
 }
 
@@ -348,6 +405,33 @@ func TestUpsertDailyIsAtomic(t *testing.T) {
 	}
 	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); len(got) != 3 {
 		t.Fatalf("bars = %d, want 3", len(got))
+	}
+	if sp, _ := s.Splits(ctx, id); !cmp.Equal(good, sp) {
+		t.Fatalf("Splits = %+v", sp)
+	}
+}
+
+func TestReplaceDailyIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	id := addInstrument(t, s, "TCS")
+	old := bars(5, 200)
+	if err := s.UpsertBars(ctx, id, old); err != nil {
+		t.Fatal(err)
+	}
+	bad := []Split{{Date: "2024-01-02", Numerator: math.NaN(), Denominator: 1}}
+	if err := s.ReplaceDaily(ctx, id, bars(3, 100), bad); err == nil {
+		t.Fatal("ReplaceDaily with an invalid split: want error")
+	}
+	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); !cmp.Equal(old, got) {
+		t.Fatalf("old bars changed after a failed ReplaceDaily: %+v", got)
+	}
+	good := []Split{{Date: "2024-01-02", Numerator: 2, Denominator: 1}}
+	if err := s.ReplaceDaily(ctx, id, bars(3, 100), good); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); !cmp.Equal(bars(3, 100), got) {
+		t.Fatalf("after replace: %+v", got)
 	}
 	if sp, _ := s.Splits(ctx, id); !cmp.Equal(good, sp) {
 		t.Fatalf("Splits = %+v", sp)

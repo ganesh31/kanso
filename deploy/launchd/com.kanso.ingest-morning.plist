@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Kanso morning retry (spec §6.4): Tuesday to Saturday at 08:00, in the Mac's
+  local zone (IST). Yahoo can lag a day behind the NSE close, so this reruns
+  the update only if some instrument is behind ^NSEI or ^NSEI has no bar for
+  the previous weekday; otherwise it exits at once.
+
+  Example only: replace /Users/you/kanso as in com.kanso.ingest.plist, then
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kanso.ingest-morning.plist
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.kanso.ingest-morning</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/you/kanso/bin/ingest</string>
+		<string>-db</string>
+		<string>/Users/you/kanso/kanso.db</string>
+		<string>-universe</string>
+		<string>NIFTY500</string>
+		<string>-constituents</string>
+		<string>/Users/you/kanso/ind_nifty500list.csv</string>
+		<string>-update</string>
+		<string>-only-if-behind</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/Users/you/Library/Logs/kanso-ingest.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/you/Library/Logs/kanso-ingest.log</string>
+</dict>
+</plist>

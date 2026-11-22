@@ -26,7 +26,28 @@ type Config struct {
 	Static fs.FS
 	// Logger logs one line per request; nil disables request logging.
 	Logger *slog.Logger
+	// MaxBars caps the bars one /api/bars response serves (spec §6.4);
+	// 0 means DefaultMaxBars.
+	MaxBars int
+	// Demo runs the public demo (spec §6.4): saved-system writes return
+	// 403, and the computation and bars endpoints are rate-limited per
+	// client IP.
+	Demo bool
+	// RateLimit is the demo's per-IP limit in requests a minute across
+	// backtest, scan, quickscan, report and bars; 0 means DefaultRateLimit.
+	// It has no effect outside demo mode.
+	RateLimit int
+	// TrustedProxies is how many proxies in front of the server append to
+	// X-Forwarded-For (1 behind Cloud Run). 0 ignores the header, which a
+	// client can set to anything, and uses the connection's address.
+	TrustedProxies int
+
+	// now is the rate limiter's clock; nil means time.Now.
+	now func() time.Time
 }
+
+// DefaultMaxBars is the /api/bars cap when Config.MaxBars is 0.
+const DefaultMaxBars = 5000
 
 func init() {
 	// Kanso never sends null for a list, so the generated client needn't
@@ -48,12 +69,23 @@ func init() {
 func New(prov market.Provider, systems SystemStore, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	api := newAPI(mux)
-	register(api, &handlers{prov: prov, systems: systems})
+	maxBars := cfg.MaxBars
+	if maxBars <= 0 {
+		maxBars = DefaultMaxBars
+	}
+	if cfg.Demo {
+		limit := cfg.RateLimit
+		if limit <= 0 {
+			limit = DefaultRateLimit
+		}
+		api.UseMiddleware(refuseSystemWrites(api), limitRate(api, newLimiter(limit, cfg.now), cfg.TrustedProxies))
+	}
+	register(api, &handlers{prov: prov, systems: systems, maxBars: maxBars})
 	mux.Handle("/", spa(cfg.Static))
 	if cfg.Logger == nil {
 		return mux
 	}
-	return logRequests(cfg.Logger, mux)
+	return logRequests(cfg.Logger, mux, cfg.TrustedProxies)
 }
 
 func newAPI(mux *http.ServeMux) huma.API {
@@ -132,12 +164,13 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-func logRequests(log *slog.Logger, next http.Handler) http.Handler {
+func logRequests(log *slog.Logger, next http.Handler, proxies int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 		log.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status,
+			"ip", clientIP(r.Header.Get("X-Forwarded-For"), r.RemoteAddr, proxies),
 			"duration_ms", time.Since(start).Milliseconds())
 	})
 }

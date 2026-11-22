@@ -1,0 +1,16 @@
+{
+  "name": "Daily defaults",
+  "universe": "NIFTY50",
+  "timeframe": "daily",
+  "entry": {
+    "all": [
+      {"type": "n_year_high", "params": {"years": 3, "all_time": false}},
+      {"type": "volume_surge", "params": {"k": 2, "window_weeks": 10}},
+      {"type": "relative_strength", "params": {"rs_months": 6, "benchmark": "^NSEI"}},
+      {"type": "not_extended", "params": {"pct": 8}}
+    ]
+  },
+  "exits": {"stop_pct": 8, "trend_sma_weeks": 30},
+  "costs": {"per_side_pct": 0.2, "slippage_pct": 0.1},
+  "portfolio": {"capital": 1000000, "max_positions": 10}
+}

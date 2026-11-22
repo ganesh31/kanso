@@ -24,7 +24,8 @@ reviews:
       instructions: |
         This is the trading engine. Check for: look-ahead (any use of bar t+1 data, or data after t's close, when evaluating bar t);
         fills other than the next bar's open; signals that don't require t-1 to be evaluable and false (spec §5.5);
-        float comparisons without a tolerance; map iteration order leaking into outputs (results must be deterministic);
+        engine float comparisons that add a tolerance (they are exact, ADR 0004; the 1e-9 relative tolerance is only for
+        tests against the vectorbt oracle); map iteration order leaking into outputs (results must be deterministic);
         duration params in bars instead of calendar units (spec §5.3). Cite the spec section when flagging.
     - path: "internal/api/**"
       instructions: |
@@ -38,6 +39,10 @@ reviews:
       instructions: |
         React 19 + TanStack Router/Query. Server state only through TanStack Query; the builder draft through its reducer.
         Evidence rendering must switch exhaustively on `type`. Every localStorage access wrapped in try/catch.
+    - path: ".github/workflows/**"
+      instructions: |
+        Every action pinned by full commit SHA with its tag in a comment, every tool at an exact version.
+        No deploy job or cloud credentials (the Cloud Run deploy is deferred). CI must not need the network for data.
     - path: "docs/**"
       instructions: "Check consistency with docs/superpowers/specs and docs/adr. Flag contradictions, not style."
 chat:

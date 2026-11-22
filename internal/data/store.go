@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -184,19 +186,37 @@ func upsertBars(ctx context.Context, q *db.Queries, id int64, bars []market.Bar)
 // ReplaceBars replaces all of an instrument's bars in one transaction: on
 // any error the old bars are left untouched.
 func (s *Store) ReplaceBars(ctx context.Context, id int64, bars []market.Bar) error {
+	if err := s.inTx(ctx, func(q *db.Queries) error { return replaceBars(ctx, q, id, bars) }); err != nil {
+		return fmt.Errorf("replace bars of %d: %w", id, err)
+	}
+	return nil
+}
+
+// ReplaceDaily replaces all of an instrument's bars with a full-history
+// fetch and stores its split events, in one transaction: on any error the
+// old bars and splits are left untouched. It keeps every stored bar on one
+// adjustment basis after the source rescales history (spec §6.1).
+func (s *Store) ReplaceDaily(ctx context.Context, id int64, bars []market.Bar, splits []Split) error {
 	err := s.inTx(ctx, func(q *db.Queries) error {
-		if err := q.DeleteBars(ctx, id); err != nil {
+		if err := replaceBars(ctx, q, id, bars); err != nil {
 			return err
 		}
-		for _, b := range bars {
-			if err := q.InsertBar(ctx, barParams(id, b)); err != nil {
-				return fmt.Errorf("bar %s: %w", b.Date, err)
-			}
-		}
-		return nil
+		return upsertSplits(ctx, q, id, splits)
 	})
 	if err != nil {
-		return fmt.Errorf("replace bars of %d: %w", id, err)
+		return fmt.Errorf("replace daily of %d: %w", id, err)
+	}
+	return nil
+}
+
+func replaceBars(ctx context.Context, q *db.Queries, id int64, bars []market.Bar) error {
+	if err := q.DeleteBars(ctx, id); err != nil {
+		return err
+	}
+	for _, b := range bars {
+		if err := q.InsertBar(ctx, barParams(id, b)); err != nil {
+			return fmt.Errorf("bar %s: %w", b.Date, err)
+		}
 	}
 	return nil
 }
@@ -242,6 +262,13 @@ func (s *Store) Splits(ctx context.Context, id int64) ([]Split, error) {
 // "" when it has none.
 func (s *Store) LatestBarDate(ctx context.Context, id int64) (market.Date, error) {
 	d, err := s.q.LatestBarDate(ctx, id)
+	return market.Date(d), err
+}
+
+// EarliestBarDate returns the date of the instrument's first stored bar,
+// or "" when it has none.
+func (s *Store) EarliestBarDate(ctx context.Context, id int64) (market.Date, error) {
+	d, err := s.q.EarliestBarDate(ctx, id)
 	return market.Date(d), err
 }
 
@@ -384,4 +411,35 @@ func (s *Store) ExportParquet(ctx context.Context, symbols []string, from, to ma
 		}
 	}
 	return market.WriteParquet(w, bars)
+}
+
+// ImportParquet is ExportParquet in reverse, for test fixtures only: it
+// loads every symbol's bars from r (replacing any stored ones) and makes
+// the equities the members of the named universe. market.Benchmark is
+// stored as an index and is not a member. Kanso never ingests real data
+// this way.
+func (s *Store) ImportParquet(ctx context.Context, r io.Reader, universe string) error {
+	bars, err := market.ReadParquet(r)
+	if err != nil {
+		return err
+	}
+	symbols := slices.Sorted(maps.Keys(bars))
+	var members []int64
+	for _, sym := range symbols {
+		in := market.Instrument{Exchange: "NSE", Symbol: sym, Type: market.Equity, LotSize: 1}
+		if sym == market.Benchmark {
+			in.Type = market.Index
+		}
+		id, err := s.UpsertInstrument(ctx, in)
+		if err != nil {
+			return err
+		}
+		if err := s.ReplaceBars(ctx, id, bars[sym]); err != nil {
+			return fmt.Errorf("import %s: %w", sym, err)
+		}
+		if in.Type == market.Equity {
+			members = append(members, id)
+		}
+	}
+	return s.ReplaceUniverse(ctx, universe, members)
 }

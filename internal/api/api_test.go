@@ -21,6 +21,15 @@ func date(i int) market.Date {
 // close of 131 on the last bar (a new 3-year high).
 func server(t *testing.T) *httptest.Server {
 	t.Helper()
+	static := fstest.MapFS{
+		"index.html":    {Data: []byte("<!doctype html><title>Kanso</title>")},
+		"assets/app.js": {Data: []byte("console.log(1)")},
+	}
+	return serverWith(t, Config{Static: static})
+}
+
+func serverWith(t *testing.T, cfg Config) *httptest.Server {
+	t.Helper()
 	bars := make([]market.Bar, 800)
 	for i := range bars {
 		bars[i] = market.Bar{Date: date(i), Open: 99, High: 100, Low: 98, Close: 99, Volume: 1}
@@ -30,13 +39,85 @@ func server(t *testing.T) *httptest.Server {
 	prov := market.NewMemProvider(
 		[]market.Instrument{{ID: 1, Exchange: "NSE", Symbol: "BREAK", Type: market.Equity, LotSize: 1}},
 		map[string][]market.Bar{"BREAK": bars}, map[string][]string{"NIFTY50": {"BREAK"}})
-	static := fstest.MapFS{
-		"index.html":    {Data: []byte("<!doctype html><title>Kanso</title>")},
-		"assets/app.js": {Data: []byte("console.log(1)")},
-	}
-	srv := httptest.NewServer(New(prov, NewMemSystems(), Config{Static: static}))
+	srv := httptest.NewServer(New(prov, NewMemSystems(), cfg))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// barsBody decodes a bars response.
+func barsBody(t *testing.T, body []byte) []market.Bar {
+	t.Helper()
+	var got struct {
+		Bars []market.Bar `json:"bars"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got.Bars
+}
+
+func TestBarsMaxRange400(t *testing.T) {
+	srv := serverWith(t, Config{MaxBars: 100})
+	// 101 bars: one over the limit.
+	status, body := do(t, srv, "GET", "/api/bars/BREAK?from="+string(date(0))+"&to="+string(date(100)), "")
+	if status != 400 {
+		t.Fatalf("101 bars: status %d: %s", status, body)
+	}
+	// Exactly the limit: inclusive at both ends and ascending.
+	status, body = do(t, srv, "GET", "/api/bars/BREAK?from="+string(date(0))+"&to="+string(date(99)), "")
+	if status != 200 {
+		t.Fatalf("100 bars: status %d: %s", status, body)
+	}
+	bars := barsBody(t, body)
+	if len(bars) != 100 || bars[0].Date != date(0) || bars[99].Date != date(99) {
+		t.Fatalf("got %d bars", len(bars))
+	}
+	for i := 1; i < len(bars); i++ {
+		if bars[i].Date <= bars[i-1].Date {
+			t.Fatalf("not ascending at %d", i)
+		}
+	}
+}
+
+func TestBarsFromAfterTo400(t *testing.T) {
+	status, body := do(t, server(t), "GET", "/api/bars/BREAK?from="+string(date(10))+"&to="+string(date(9)), "")
+	if status != 400 || !strings.Contains(string(body), "query.from") {
+		t.Fatalf("status %d: %s", status, body)
+	}
+}
+
+func TestBarsWithoutFromServesTheLastMaxBars(t *testing.T) {
+	status, body := do(t, serverWith(t, Config{MaxBars: 100}), "GET", "/api/bars/BREAK", "")
+	if status != 200 {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	bars := barsBody(t, body)
+	if len(bars) != 100 || bars[0].Date != date(700) || bars[99].Date != date(799) {
+		t.Fatalf("got %d bars from %v", len(bars), bars[0].Date)
+	}
+}
+
+func TestBarsMaxDefaultsTo5000(t *testing.T) {
+	// 800 bars is under the default limit.
+	if status, body := do(t, server(t), "GET", "/api/bars/BREAK?from="+string(date(0)), ""); status != 200 || len(barsBody(t, body)) != 800 {
+		t.Fatalf("status %d", status)
+	}
+	if DefaultMaxBars != 5000 {
+		t.Fatalf("DefaultMaxBars = %d", DefaultMaxBars)
+	}
+}
+
+func TestBarsWeeklyTimeframe(t *testing.T) {
+	// 2020-01-01 is a Wednesday; 800 calendar days of bars (weekends too)
+	// make 115 ISO weeks.
+	status, body := do(t, server(t), "GET", "/api/bars/BREAK?from="+string(date(0))+"&timeframe=weekly", "")
+	if status != 200 {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	bars := barsBody(t, body)
+	if len(bars) != 115 || bars[0].Date != date(4) || bars[0].Open != 99 || bars[0].Volume != 5 {
+		t.Fatalf("got %d weekly bars, first %+v", len(bars), bars[0])
+	}
 }
 
 func do(t *testing.T, srv *httptest.Server, method, path, body string) (int, []byte) {

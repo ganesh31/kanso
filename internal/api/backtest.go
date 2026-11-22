@@ -23,7 +23,7 @@ func registerBacktest(api huma.API, h *handlers) {
 		Method:      http.MethodPost,
 		Path:        "/api/backtest",
 		Summary:     "Backtest a system over its stock list",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusTooManyRequests},
 	}, h.backtest)
 }
 
@@ -58,6 +58,9 @@ type Trade struct {
 	ReturnPct  float64     `json:"return_pct" doc:"Per-share return in percent, net of costs and slippage"`
 	// HoldingDays counts trading days from entry to exit.
 	HoldingDays int `json:"holding_days" doc:"Trading days from entry to exit"`
+	// Level is the breakout level at the signal bar, for the trade chart.
+	Level     *float64     `json:"level,omitempty" doc:"Breakout level at the signal bar; absent when the rule has none"`
+	LevelDate *market.Date `json:"level_date,omitempty" format:"date" doc:"Date the breakout level was set"`
 }
 
 // PortfolioTrade is a trade the portfolio held.
@@ -190,7 +193,7 @@ func toTrade(t backtest.Trade) Trade {
 	return Trade{
 		Symbol: t.Symbol, SignalDate: t.SignalDate, EntryDate: t.EntryDate, ExitDate: t.ExitDate,
 		EntryPrice: t.EntryPrice, ExitPrice: t.ExitPrice, ExitReason: string(t.ExitReason), GappedStop: t.GappedStop,
-		ReturnPct: t.ReturnPct, HoldingDays: t.HoldingDays,
+		ReturnPct: t.ReturnPct, HoldingDays: t.HoldingDays, Level: t.Level, LevelDate: t.LevelDate,
 	}
 }
 

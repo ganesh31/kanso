@@ -2,6 +2,7 @@ package scan
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -69,8 +70,8 @@ func QuickSystem(q QuickRequest, reg *patterns.Registry) (rules.System, []string
 // pattern's own condition (after any inserted ones) is "pattern" and
 // "params".
 func quickPaths(err error, offset int) error {
-	ve, ok := err.(*rules.ValidationError)
-	if !ok {
+	var ve *rules.ValidationError
+	if !errors.As(err, &ve) {
 		return err
 	}
 	own := fmt.Sprintf("entry.all[%d].", offset)

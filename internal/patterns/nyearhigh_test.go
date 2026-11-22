@@ -313,14 +313,18 @@ func TestLoadBuildsWeeklyAlignedByISOWeek(t *testing.T) {
 	bars := map[string][]market.Bar{
 		// TCS skips Fri 5 Jan; the bench has no bar in the week of 15 Jan.
 		"TCS": {
-			{Date: "2024-01-01"}, {Date: "2024-01-04"},
-			{Date: "2024-01-08"}, {Date: "2024-01-12"},
+			{Date: "2024-01-01"},
+			{Date: "2024-01-04"},
+			{Date: "2024-01-08"},
+			{Date: "2024-01-12"},
 			{Date: "2024-01-16"},
 			{Date: "2024-01-22"},
 		},
 		"^NSEI": {
-			{Date: "2024-01-01"}, {Date: "2024-01-05"},
-			{Date: "2024-01-09"}, {Date: "2024-01-12"},
+			{Date: "2024-01-01"},
+			{Date: "2024-01-05"},
+			{Date: "2024-01-09"},
+			{Date: "2024-01-12"},
 			{Date: "2024-01-22"},
 		},
 	}
