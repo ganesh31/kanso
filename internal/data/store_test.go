@@ -271,7 +271,7 @@ func TestWALReaderDuringWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rtx.Rollback()
+	defer func() { _ = rtx.Rollback() }()
 	var n int
 	if err := rtx.QueryRowContext(ctx, "SELECT count(*) FROM bars_daily").Scan(&n); err != nil {
 		t.Fatal(err)
