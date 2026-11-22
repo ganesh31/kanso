@@ -76,9 +76,7 @@ export function HonestyPanel({ honesty: h, variations }: { honesty: Honesty; var
           )}
         </Row>
         {h.skipped.length > 0 ? (
-          <Row term="Skipped stocks">
-            {h.skipped.map((s) => `${s.symbol} (${reasonText(s.reason)})`).join(", ")}
-          </Row>
+          <Row term="Skipped stocks">{h.skipped.map((s) => `${s.symbol} (${reasonText(s.reason)})`).join(", ")}</Row>
         ) : null}
         <Row term="Variations tested">
           <span className="tabular-nums">{variations}</span>

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vite-plus/test";
+import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import type { System } from "@/api/client";
 import { countVariations, recordVariation } from "./variations";
 
@@ -51,16 +51,15 @@ describe("variations", () => {
   });
 
   test("works in memory when storage throws", () => {
-    const orig = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("quota");
-    };
+    });
     try {
       expect(recordVariation("d3", system)).toBe(1);
       expect(recordVariation("d3", { ...system, exits: { stop_pct: 5, trend_sma_weeks: 30 } })).toBe(2);
       expect(countVariations("d3")).toBe(2);
     } finally {
-      Storage.prototype.setItem = orig;
+      setItem.mockRestore();
     }
   });
 });
