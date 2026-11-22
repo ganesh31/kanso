@@ -179,6 +179,32 @@ func TestBacktestListsSkippedSignals(t *testing.T) {
 	}
 }
 
+func TestBacktestTradeCarriesBreakoutLevelForTheChart(t *testing.T) {
+	status, body := do(t, backtestServer(t), "POST", "/api/backtest",
+		`{"name":"x","universe":"NIFTY50","entry":{"all":[{"type":"n_year_high"}]}}`)
+	if status != 200 {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	var got struct {
+		Trades []struct {
+			Level     *float64 `json:"level"`
+			LevelDate string   `json:"level_date"`
+		} `json:"trades"`
+		PortfolioTrades []struct {
+			Level *float64 `json:"level"`
+		} `json:"portfolio_trades"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Trades) != 1 || got.Trades[0].Level == nil || *got.Trades[0].Level != 130 || got.Trades[0].LevelDate != string(date(300)) {
+		t.Fatalf("trades: %s", body)
+	}
+	if len(got.PortfolioTrades) != 1 || got.PortfolioTrades[0].Level == nil || *got.PortfolioTrades[0].Level != 130 {
+		t.Fatalf("portfolio trades: %s", body)
+	}
+}
+
 func TestBacktestUnknownUniverse404(t *testing.T) {
 	status, body := do(t, backtestServer(t), "POST", "/api/backtest",
 		`{"name":"x","universe":"NOPE","entry":{"all":[{"type":"n_year_high"}]}}`)
