@@ -247,12 +247,18 @@ func candidates(sigs []int, ctx *patterns.Context, daily *market.Series, sys *ru
 }
 
 // singleStock keeps the candidates a single-stock trader takes: each one
-// whose entry is not before the previous kept trade's exit (spec §5.5).
+// whose entry is not before the previous kept trade's exit (spec §5.5). An
+// entry on the previous trade's exit day is taken only when that exit
+// filled at the open (fillsAtOpen): after an intraday stop the position
+// was still held at the open, where the entry fills.
 func singleStock(cands []Trade) []Trade {
 	out := []Trade{}
 	for _, tr := range cands {
-		if n := len(out); n > 0 && tr.EntryDate < out[n-1].ExitDate {
-			continue
+		if n := len(out); n > 0 {
+			prev := out[n-1]
+			if tr.EntryDate < prev.ExitDate || (tr.EntryDate == prev.ExitDate && !fillsAtOpen(prev)) {
+				continue
+			}
 		}
 		out = append(out, tr)
 	}
