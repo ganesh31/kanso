@@ -39,5 +39,15 @@ run: build
 sqlc:
 	sqlc generate -f internal/data/sqlc.yaml
 
-benchmark e2e demo-snapshot:
+# Regenerate the vectorbt oracle's fixture and golden files (spec §8) from
+# an ingested database that has every BENCH_SYMBOLS member:
+# make benchmark KANSO_DB=kanso.db. Needs uv; the Go tests never do.
+BENCH_SYMBOLS = RELIANCE,TCS,HDFCBANK,INFY,ICICIBANK,ITC,LT,SBIN,BHARTIARTL,HINDUNILVR,DIVISLAB,BAJFINANCE,HEROMOTOCO,^NSEI
+BENCH_TO = 2026-11-20
+benchmark:
+	@test -n "$(KANSO_DB)" || { echo "make benchmark: set KANSO_DB=path/to/kanso.db"; exit 1; }
+	go run ./cmd/export-fixture -db $(KANSO_DB) -symbols '$(BENCH_SYMBOLS)' -from 2005-01-01 -to $(BENCH_TO) -out testdata/benchmark/bars.parquet
+	uv run --project tools/vbt-benchmark python -I tools/vbt-benchmark/benchmark.py testdata/benchmark/bars.parquet testdata/benchmark/systems testdata/benchmark
+
+e2e demo-snapshot:
 	@echo "make $@: not implemented yet (later V1 ticket)"; exit 1
