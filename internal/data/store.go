@@ -184,19 +184,37 @@ func upsertBars(ctx context.Context, q *db.Queries, id int64, bars []market.Bar)
 // ReplaceBars replaces all of an instrument's bars in one transaction: on
 // any error the old bars are left untouched.
 func (s *Store) ReplaceBars(ctx context.Context, id int64, bars []market.Bar) error {
+	if err := s.inTx(ctx, func(q *db.Queries) error { return replaceBars(ctx, q, id, bars) }); err != nil {
+		return fmt.Errorf("replace bars of %d: %w", id, err)
+	}
+	return nil
+}
+
+// ReplaceDaily replaces all of an instrument's bars with a full-history
+// fetch and stores its split events, in one transaction: on any error the
+// old bars and splits are left untouched. It keeps every stored bar on one
+// adjustment basis after the source rescales history (spec §6.1).
+func (s *Store) ReplaceDaily(ctx context.Context, id int64, bars []market.Bar, splits []Split) error {
 	err := s.inTx(ctx, func(q *db.Queries) error {
-		if err := q.DeleteBars(ctx, id); err != nil {
+		if err := replaceBars(ctx, q, id, bars); err != nil {
 			return err
 		}
-		for _, b := range bars {
-			if err := q.InsertBar(ctx, barParams(id, b)); err != nil {
-				return fmt.Errorf("bar %s: %w", b.Date, err)
-			}
-		}
-		return nil
+		return upsertSplits(ctx, q, id, splits)
 	})
 	if err != nil {
-		return fmt.Errorf("replace bars of %d: %w", id, err)
+		return fmt.Errorf("replace daily of %d: %w", id, err)
+	}
+	return nil
+}
+
+func replaceBars(ctx context.Context, q *db.Queries, id int64, bars []market.Bar) error {
+	if err := q.DeleteBars(ctx, id); err != nil {
+		return err
+	}
+	for _, b := range bars {
+		if err := q.InsertBar(ctx, barParams(id, b)); err != nil {
+			return fmt.Errorf("bar %s: %w", b.Date, err)
+		}
 	}
 	return nil
 }
