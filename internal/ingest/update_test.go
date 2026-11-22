@@ -87,6 +87,57 @@ func TestIngestSummaryReportsBehindInstruments(t *testing.T) {
 	}
 }
 
+// freshStore holds ^NSEI and TCS through 2026-11-18 (a Wednesday) and INFY
+// through infyTo.
+func freshStore(t *testing.T, infyTo int) *data.Store {
+	t.Helper()
+	src := &fakeSource{bars: map[string][]market.Bar{
+		"^NSEI":   weekdays("2026-11-02", 13, 24000),
+		"TCS.NS":  weekdays("2026-11-02", 13, 4000),
+		"INFY.NS": weekdays("2026-11-02", infyTo, 1500),
+	}}
+	st := openStore(t)
+	if _, err := Backfill(context.Background(), st, src, optsTo("2026-11-18", "TCS", "INFY")); err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func TestOnlyIfBehindSkipsWhenFresh(t *testing.T) {
+	st := freshStore(t, 13)
+	need, reason, err := NeedsUpdate(context.Background(), st, "NIFTY50", "2026-11-19")
+	if err != nil || need {
+		t.Fatalf("NeedsUpdate = %v (%s), %v; want skip", need, reason, err)
+	}
+}
+
+func TestOnlyIfBehindRunsWhenAnInstrumentIsBehind(t *testing.T) {
+	st := freshStore(t, 12)
+	need, reason, err := NeedsUpdate(context.Background(), st, "NIFTY50", "2026-11-19")
+	if err != nil || !need || !strings.Contains(reason, "INFY") {
+		t.Fatalf("NeedsUpdate = %v (%s), %v; want run naming INFY", need, reason, err)
+	}
+}
+
+func TestOnlyIfBehindRunsWhenBenchmarkMissesPreviousWeekday(t *testing.T) {
+	st := freshStore(t, 13)
+	// Friday 2026-11-20 morning: the benchmark should have Thursday's bar.
+	need, reason, err := NeedsUpdate(context.Background(), st, "NIFTY50", "2026-11-20")
+	if err != nil || !need || !strings.Contains(reason, "2026-11-19") {
+		t.Fatalf("NeedsUpdate = %v (%s), %v; want run", need, reason, err)
+	}
+	// Monday 2026-11-23 morning: the previous weekday is Friday 2026-11-20.
+	if need, reason, _ := NeedsUpdate(context.Background(), st, "NIFTY50", "2026-11-23"); !need || !strings.Contains(reason, "2026-11-20") {
+		t.Fatalf("Monday: NeedsUpdate = %v (%s); want run for Friday", need, reason)
+	}
+}
+
+func TestOnlyIfBehindRunsOnAnEmptyStore(t *testing.T) {
+	if need, _, err := NeedsUpdate(context.Background(), openStore(t), "NIFTY50", "2026-11-19"); err != nil || !need {
+		t.Fatalf("NeedsUpdate = %v, %v; want run", need, err)
+	}
+}
+
 func TestBackfillRerunWithLaterFromKeepsOneBasis(t *testing.T) {
 	src := &fakeSource{bars: map[string][]market.Bar{"TCS.NS": weekdays("2016-01-01", 2000, 200), "^NSEI": weekdays("2016-01-01", 2000, 21000)}}
 	st := backfilled(t, src, "2023-08-31")
