@@ -113,6 +113,10 @@ export interface PortfolioTrade {
   gapped_stop: boolean;
   /** Trading days from entry to exit */
   holding_days: number;
+  /** Breakout level at the signal bar; absent when the rule has none */
+  level?: number;
+  /** Date the breakout level was set */
+  level_date?: string;
   /** Whole shares bought */
   quantity: number;
   /** Per-share return in percent, net of costs and slippage */
@@ -208,6 +212,10 @@ export interface Trade {
   gapped_stop: boolean;
   /** Trading days from entry to exit */
   holding_days: number;
+  /** Breakout level at the signal bar; absent when the rule has none */
+  level?: number;
+  /** Date the breakout level was set */
+  level_date?: string;
   /** Per-share return in percent, net of costs and slippage */
   return_pct: number;
   /** Signal bar (weekly: the signal week's last trading day) */
@@ -606,11 +614,21 @@ export interface ValidateOutputBody {
 }
 
 export type GetBarsParams = {
-  /** First date (inclusive); default: the first bar */
+  /** First date (inclusive); default: as far back as the bar limit allows */
   from?: string;
   /** Last date (inclusive); default: the last bar */
   to?: string;
+  /** weekly: ISO-week bars built from the daily bars in the range, dated by their last day */
+  timeframe?: GetBarsTimeframe;
 };
+
+export type GetBarsTimeframe = typeof GetBarsTimeframe[keyof typeof GetBarsTimeframe];
+
+
+export const GetBarsTimeframe = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
@@ -740,7 +758,7 @@ export const getGetBarsUrl = (symbol: string,
 }
 
 /**
- * @summary Daily bars for one chart
+ * @summary One symbol's bars for one chart, at most the bar limit
  */
 export const getBars = async (symbol: string,
     params?: GetBarsParams, options?: Parameters<typeof apiFetch>[1]): Promise<BarsOutputBody> => {
@@ -789,7 +807,7 @@ export type GetBarsQueryResult = NonNullable<Awaited<ReturnType<typeof getBars>>
 export type GetBarsQueryError = ErrorType<ErrorModel>
 
 
-/** @summary Daily bars for one chart */
+/** @summary One symbol's bars for one chart, at most the bar limit */
 export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError = ErrorType<ErrorModel>>(
  symbol: string,
     params: undefined |  GetBarsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBars>>, TError, TData>> & Pick<
@@ -801,7 +819,7 @@ export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError =
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** @summary Daily bars for one chart */
+/** @summary One symbol's bars for one chart, at most the bar limit */
 export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError = ErrorType<ErrorModel>>(
  symbol: string,
     params?: GetBarsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBars>>, TError, TData>> & Pick<
@@ -813,13 +831,13 @@ export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError =
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** @summary Daily bars for one chart */
+/** @summary One symbol's bars for one chart, at most the bar limit */
 export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError = ErrorType<ErrorModel>>(
  symbol: string,
     params?: GetBarsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBars>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** @summary Daily bars for one chart */
+/** @summary One symbol's bars for one chart, at most the bar limit */
 export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError = ErrorType<ErrorModel>>(
  symbol: string,
     params?: GetBarsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBars>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}

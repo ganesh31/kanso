@@ -42,6 +42,11 @@ type Trade struct {
 	// (spec §5.6), or -Inf when not evaluable. Set by Run, not by
 	// TradePath. It is not serialized: JSON has no -Inf.
 	RankKey float64 `json:"-"`
+	// Level and LevelDate are the breakout level at the signal bar and
+	// the date it was set, for the trade chart; nil when the rule has no
+	// breakout level. Set by Run, not by TradePath.
+	Level     *float64
+	LevelDate *market.Date
 	// Quantity is the whole shares the portfolio bought; 0 outside it.
 	Quantity int64
 }
