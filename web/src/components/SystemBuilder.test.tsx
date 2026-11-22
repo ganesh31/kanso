@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { configureApi, type Meta, type ParamSpecUnit, type System } from "@/api/client";
+import { type BacktestResult, configureApi, type Meta, type ParamSpecUnit, type System } from "@/api/client";
 import { encodeDraft, fromSystem } from "@/state/draft";
 import { SystemBuilder } from "./SystemBuilder";
 
@@ -107,6 +107,7 @@ const lastBody = (key: string) => calls.mock.calls.filter(([k]) => k === key).at
 
 describe("SystemBuilder", () => {
   beforeEach(() => {
+    localStorage.clear();
     calls.mockReset();
     saved = [];
     configureApi({
@@ -254,6 +255,53 @@ describe("SystemBuilder", () => {
     }
     expect(within(any).getAllByRole("switch")).toHaveLength(4);
     expect(add).toBeDisabled();
+  });
+
+  test("variations: rerunning counts once, a changed stop counts again", async () => {
+    const result: BacktestResult = {
+      system: defaultSystem,
+      trades: [],
+      portfolio_trades: [],
+      trade_stats: {
+        trades: 0,
+        win_rate: 0,
+        avg_win_pct: 0,
+        avg_loss_pct: 0,
+        expectancy_pct: 0,
+        median_holding_days: 0,
+      },
+      honesty: {
+        fill_model: "next-day open",
+        per_side_pct: 0.2,
+        slippage_pct: 0.1,
+        survivorship: true,
+        data_source: "Yahoo Finance",
+        adjustment: "split-adjusted, not dividend-adjusted",
+        data_start: "2007-09-17",
+        data_end: "2026-11-20",
+        ranking_rule: "crowded days ranked by 6-month RS, then symbol",
+        skipped: [],
+        skipped_signals: [],
+      },
+      portfolio: { cagr: 0, max_drawdown: 0, final_equity: 0, exposure: 0, bench_cagr: 0, bench_max_drawdown: 0 },
+      equity: [],
+      benchmark: [],
+    };
+    calls.mockImplementation((key) => (key === "POST /api/backtest" ? json(200, result) : undefined));
+    renderBuilder();
+    const backtest = await screen.findByRole("button", { name: "Backtest" });
+    const count = async (n: string) => {
+      const panel = await screen.findByRole("complementary", { name: "How this was tested" });
+      await waitFor(() => expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent(n));
+    };
+    fireEvent.click(backtest);
+    await count("1");
+    fireEvent.click(backtest);
+    await waitFor(() => expect(calls.mock.calls.filter(([k]) => k === "POST /api/backtest")).toHaveLength(2));
+    await count("1");
+    fireEvent.change(screen.getByLabelText("Stop-loss below entry (%)"), { target: { value: "10" } });
+    fireEvent.click(backtest);
+    await count("2");
   });
 
   test("Scan scans the draft across its stock list", async () => {

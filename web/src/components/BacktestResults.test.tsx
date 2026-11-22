@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, test, vi } from "vite-plus/test";
-import type { BacktestResult, System } from "@/api/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { configureApi, type BacktestResult, type System } from "@/api/client";
 import { BacktestResults } from "./BacktestResults";
 
 vi.mock("./EquityChart", () => ({
@@ -10,6 +11,21 @@ vi.mock("./EquityChart", () => ({
     </div>
   ),
 }));
+
+vi.mock("./PriceChart", () => ({
+  PriceChart: ({ bars, level, markers }: { bars: unknown[]; level?: number; markers?: unknown[] }) => (
+    <div
+      data-testid="price-chart"
+      data-bars={bars.length}
+      data-level={level ?? ""}
+      data-markers={JSON.stringify(markers ?? [])}
+    />
+  ),
+}));
+
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
 
 const system: System = {
   name: "3-year breakout",
@@ -40,6 +56,8 @@ const result: BacktestResult = {
       gapped_stop: true,
       return_pct: -8.39,
       holding_days: 17,
+      level: 4050,
+      level_date: "2022-01-17",
     },
     {
       symbol: "INFY",
@@ -97,11 +115,47 @@ const result: BacktestResult = {
   ],
 };
 
-const renderPanel = (r: BacktestResult = result) => render(<BacktestResults result={r} />);
+const tcsBars = ["2024-02-06", "2024-02-07", "2024-02-08", "2024-03-01", "2024-03-04"].map((date) => ({
+  date,
+  open: 4100,
+  high: 4150,
+  low: 4000,
+  close: 4120,
+  volume: 1000,
+}));
+const bars = vi.fn((url: string) => {
+  const symbol = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+  return json(200, { symbol, bars: symbol === "TCS" ? tcsBars : [] });
+});
+
+function renderPanel(r: BacktestResult = result, variations = 1) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <BacktestResults result={r} variations={variations} />
+    </QueryClientProvider>,
+  );
+}
 
 describe("BacktestResults", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    configureApi({
+      baseUrl: "http://test",
+      fetch: async (input) => {
+        const req = input as Request;
+        const path = new URL(req.url).pathname;
+        if (path.startsWith("/api/bars/")) return bars(req.url);
+        return json(404, { title: "Not Found" });
+      },
+    });
+  });
+
+  afterEach(() => configureApi({}));
+
   test("shows trade-level stats and the fill model", async () => {
     renderPanel();
+
     const tiles = await screen.findByRole("region", { name: "Trade-level stats" });
     expect(within(tiles).getByText("Trades").nextSibling).toHaveTextContent("2");
     expect(within(tiles).getByText("Win rate").nextSibling).toHaveTextContent("50.0%");
@@ -133,6 +187,13 @@ describe("BacktestResults", () => {
     expect(screen.getByText(/1 signal skipped: insufficient cash \(HDFCBANK 2014-05-12\)/)).toBeInTheDocument();
   });
 
+  test("the honesty panel beside the results shows the variations count", async () => {
+    renderPanel(result, 3);
+    const panel = await screen.findByRole("complementary", { name: "How this was tested" });
+    expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent("3");
+    expect(within(panel).getByText(/survivorship bias/)).toBeInTheDocument();
+  });
+
   test("lists every trade with its exit reason", async () => {
     renderPanel();
     const table = await screen.findByRole("table", { name: "Trades" });
@@ -143,6 +204,45 @@ describe("BacktestResults", () => {
     expect(rows[1]).toHaveTextContent("4,105.20");
     expect(rows[2]).toHaveTextContent("INFY");
     expect(rows[2]).toHaveTextContent("open");
+  });
+
+  test("clicking a trade opens chart with entry/exit markers", async () => {
+    renderPanel();
+    const table = await screen.findByRole("table", { name: "Trades" });
+    expect(screen.queryByTestId("price-chart")).not.toBeInTheDocument();
+
+    fireEvent.click(within(table).getByRole("button", { name: "Chart the TCS trade entered 2024-02-07" }));
+
+    const chart = await screen.findByRole("figure", { name: "TCS trade chart" });
+    const pc = within(chart).getByTestId("price-chart");
+    await waitFor(() => expect(pc).toHaveAttribute("data-bars", "5"));
+    expect(pc).toHaveAttribute("data-level", "4050");
+    expect(JSON.parse(pc.getAttribute("data-markers") ?? "[]")).toEqual([
+      { date: "2024-02-07", kind: "entry", price: 4105.2 },
+      { date: "2024-03-01", kind: "exit", price: 3776.78 },
+    ]);
+    // One symbol per request, a window around the trade.
+    const url = new URL(bars.mock.calls.at(-1)?.[0] ?? "");
+    expect(url.pathname).toBe("/api/bars/TCS");
+    expect(url.searchParams.get("from")).toBe("2023-02-07");
+    expect(url.searchParams.get("to")).toBe("2024-06-01");
+    expect(chart).toHaveTextContent("Bought 2024-02-07 at 4,105.20");
+    expect(chart).toHaveTextContent("Sold 2024-03-01 at 3,776.78, stop (gapped)");
+    expect(chart).toHaveTextContent("Breakout level 4,050.00, set 2022-01-17");
+
+    fireEvent.click(within(chart).getByRole("button", { name: "Close chart" }));
+    expect(screen.queryByRole("figure", { name: "TCS trade chart" })).not.toBeInTheDocument();
+  });
+
+  test("a trade still open has no exit marker and no level line without a level", async () => {
+    renderPanel();
+    const table = await screen.findByRole("table", { name: "Trades" });
+    fireEvent.click(within(table).getByRole("button", { name: "Chart the INFY trade entered 2024-09-03" }));
+    const pc = within(await screen.findByRole("figure", { name: "INFY trade chart" })).getByTestId("price-chart");
+    expect(pc).toHaveAttribute("data-level", "");
+    expect(JSON.parse(pc.getAttribute("data-markers") ?? "[]")).toEqual([
+      { date: "2024-09-03", kind: "entry", price: 1900 },
+    ]);
   });
 
   test("long trade lists show 25 rows until asked for all", async () => {

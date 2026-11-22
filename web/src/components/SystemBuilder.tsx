@@ -22,8 +22,11 @@ import {
   fromSystem,
   layoutKey,
   systemReducer,
+  newDraftId,
   toSystem,
+  variationsKey,
 } from "@/state/draft";
+import { recordVariation } from "@/state/variations";
 import { useSystems } from "@/state/systems";
 import { AnyGroup, ConditionGroup } from "./AnyGroup";
 import { BacktestResults } from "./BacktestResults";
@@ -40,9 +43,19 @@ const timeframes: { value: Timeframe; label: string }[] = [
   { value: "weekly", label: "Weekly" },
 ];
 
-/** A draft without exits, costs or a portfolio (a Quick Scan's) takes the default system's. */
-function withDefaultSettings(d: Draft, def: System): Draft {
-  return { ...d, exits: d.exits ?? def.exits, costs: d.costs ?? def.costs, portfolio: d.portfolio ?? def.portfolio };
+/**
+ * A draft without exits, costs or a portfolio (a Quick Scan's) takes the default system's, and an
+ * unsaved draft without an id gets one to count its variations under.
+ */
+function prepare(d: Draft, def: System): Draft {
+  const out = {
+    ...d,
+    exits: d.exits ?? def.exits,
+    costs: d.costs ?? def.costs,
+    portfolio: d.portfolio ?? def.portfolio,
+  };
+  if (!out.id && !out.draftId) out.draftId = newDraftId();
+  return out;
 }
 
 /** A failed request, with the layout of the draft it was sent for (see `layoutKey`). */
@@ -71,7 +84,7 @@ export function SystemBuilder({
   // Only the link the page opened on seeds the draft; later values are the draft's own echoes.
   const [linked] = useState(() => (draftParam ? decodeDraft(draftParam) : undefined));
   const initial = useMemo(
-    () => (def.data ? withDefaultSettings(linked ?? fromSystem(def.data), def.data) : undefined),
+    () => (def.data ? prepare(linked ?? fromSystem(def.data), def.data) : undefined),
     [linked, def.data],
   );
 
@@ -130,6 +143,7 @@ function Editor({
   );
   const [shown, setShown] = useState<"backtest" | "scan">();
   const [failure, setFailure] = useState<Failure>();
+  const [variations, setVariations] = useState(0);
   const [saveState, setSaveState] = useState<"saving" | "saved">();
   const [pickedSaved, setPickedSaved] = useState("");
 
@@ -142,7 +156,15 @@ function Editor({
   const backtest = () => {
     setShown("backtest");
     setFailure(undefined);
-    run.mutate({ data: toSystem(draft) }, { onError: (error) => setFailure({ error, layout }) });
+    const system = toSystem(draft);
+    const key = variationsKey(draft);
+    run.mutate(
+      { data: system },
+      {
+        onSuccess: () => setVariations(recordVariation(key, system)),
+        onError: (error) => setFailure({ error, layout }),
+      },
+    );
   };
   const startScan = () => {
     setShown("scan");
@@ -306,6 +328,7 @@ function Editor({
         failure={current}
         hasFieldErrors={fields.length > 0}
         backtest={run.isPending ? "pending" : run.data}
+        variations={variations}
         universe={draft.universe}
         scan={scanned === undefined ? undefined : scan.isPending ? "pending" : scan.isSuccess ? scan.data : undefined}
         mode={mode}
@@ -322,6 +345,7 @@ function Outcome({
   failure,
   hasFieldErrors,
   backtest,
+  variations,
   scan,
   universe,
   mode,
@@ -332,6 +356,7 @@ function Outcome({
   failure: Failure | undefined;
   hasFieldErrors: boolean;
   backtest: BacktestResult | "pending" | undefined;
+  variations: number;
   scan: Parameters<typeof ScanResults>[0]["result"] | "pending" | undefined;
   universe: string;
   mode: ScanRequestMode;
@@ -352,7 +377,7 @@ function Outcome({
   if (shown === "backtest") {
     if (backtest === "pending") return <p className="text-muted-foreground">Backtesting {universe} since 2007…</p>;
     if (failure) return error;
-    return backtest ? <BacktestResults result={backtest} /> : null;
+    return backtest ? <BacktestResults result={backtest} variations={variations} /> : null;
   }
   if (shown === "scan") {
     return (

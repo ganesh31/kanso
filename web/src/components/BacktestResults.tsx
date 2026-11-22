@@ -1,6 +1,8 @@
-import type { BacktestResult, Honesty, PortfolioStats, Trade, TradeStats } from "@/api/client";
+import type { BacktestResult, PortfolioStats, Trade, TradeStats } from "@/api/client";
 import { useState } from "react";
 import { EquityChart } from "@/components/EquityChart";
+import { HonestyPanel } from "@/components/HonestyPanel";
+import { exitLabel, TradeChart } from "@/components/TradeChart";
 import { Button } from "@/components/ui/button";
 import { formatPrice, formatSignedPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -88,40 +90,20 @@ function PortfolioTiles({ stats }: { stats: PortfolioStats }) {
   );
 }
 
-const SKIP_REASONS: Record<string, string> = {
-  price_above_slot: "price above slot size",
-  insufficient_cash: "insufficient cash",
-};
-const SKIPPED_SHOWN = 5;
-
-/** "1 signal skipped: price above slot size (MRF 2024-03-04)", one line per reason. */
-function skippedSignalLines(h: Honesty): string[] {
-  const byReason = new Map<string, string[]>();
-  for (const s of h.skipped_signals) {
-    const list = byReason.get(s.reason);
-    if (list) list.push(`${s.symbol} ${s.entry_date}`);
-    else byReason.set(s.reason, [`${s.symbol} ${s.entry_date}`]);
-  }
-  return [...byReason].map(([reason, list]) => {
-    const shown = list.slice(0, SKIPPED_SHOWN).join(", ");
-    const more = list.length > SKIPPED_SHOWN ? ` and ${list.length - SKIPPED_SHOWN} more` : "";
-    const noun = list.length === 1 ? "signal" : "signals";
-    return `${list.length} ${noun} skipped: ${SKIP_REASONS[reason] ?? reason} (${shown}${more})`;
-  });
-}
-
-function exitLabel(t: Trade): string {
-  return t.exit_reason === "stop" && t.gapped_stop ? "stop (gapped)" : t.exit_reason;
-}
-
 const TRADES_SHOWN = 25;
 
+const tradeKey = (t: Trade) => `${t.symbol}-${t.entry_date}`;
+
+/** Every trade; clicking one opens its chart above the table. */
 function TradeList({ trades }: { trades: Trade[] }) {
   const [all, setAll] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   if (trades.length === 0) return <p className="text-muted-foreground">No trades.</p>;
   const shown = all ? trades : trades.slice(0, TRADES_SHOWN);
+  const charted = trades.find((t) => tradeKey(t) === open);
   return (
     <div className="flex flex-col gap-3">
+      {charted ? <TradeChart key={open} trade={charted} onClose={() => setOpen(null)} /> : null}
       <div className="overflow-x-auto">
         <table aria-label="Trades" className="w-full text-sm">
           <thead className="text-muted-foreground text-left">
@@ -139,8 +121,18 @@ function TradeList({ trades }: { trades: Trade[] }) {
           </thead>
           <tbody className="tabular-nums">
             {shown.map((t) => (
-              <tr key={`${t.symbol}-${t.entry_date}`} className="border-t">
-                <td className="py-1 pr-3 font-medium">{t.symbol}</td>
+              <tr key={tradeKey(t)} className={cn("border-t", tradeKey(t) === open && "bg-muted")}>
+                <td className="py-1 pr-3 font-medium">
+                  <button
+                    type="button"
+                    aria-label={`Chart the ${t.symbol} trade entered ${t.entry_date}`}
+                    aria-pressed={tradeKey(t) === open}
+                    className="hover:text-foreground focus-visible:ring-ring rounded-sm underline decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:outline-none"
+                    onClick={() => setOpen((cur) => (cur === tradeKey(t) ? null : tradeKey(t)))}
+                  >
+                    {t.symbol}
+                  </button>
+                </td>
                 <td className="py-1 pr-3">{t.signal_date}</td>
                 <td className="py-1 pr-3">{t.entry_date}</td>
                 <td className="py-1 pr-3 text-right">{formatPrice(t.entry_price)}</td>
@@ -165,36 +157,31 @@ function TradeList({ trades }: { trades: Trade[] }) {
   );
 }
 
-/** A backtest: portfolio tiles and equity vs Nifty, how it was tested, trade-level tiles and the trade list. */
-export function BacktestResults({ result }: { result: BacktestResult }) {
+/**
+ * A backtest: portfolio tiles and equity vs Nifty, trade-level tiles and the trade list, with the
+ * honesty panel (and the draft's variations count) beside them.
+ */
+export function BacktestResults({ result, variations }: { result: BacktestResult; variations: number }) {
   return (
-    <section aria-label="Backtest results" className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <h3 className="text-lg font-bold">Portfolio</h3>
-        <PortfolioTiles stats={result.portfolio} />
-        <EquityChart equity={result.equity} benchmark={result.benchmark} />
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section aria-label="Results" className="flex min-w-0 flex-col gap-8">
+        <div className="flex flex-col gap-3">
+          <h3 className="text-lg font-bold">Portfolio</h3>
+          <PortfolioTiles stats={result.portfolio} />
+          <EquityChart equity={result.equity} benchmark={result.benchmark} />
+        </div>
+        <div className="flex flex-col gap-3">
+          <h3 className="text-lg font-bold">Every signal</h3>
+          <p className="text-muted-foreground -mt-2 text-sm">
+            Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
+          </p>
+          <TradeTiles stats={result.trade_stats} />
+          <TradeList trades={result.trades} />
+        </div>
+      </section>
+      <div className="lg:sticky lg:top-6">
+        <HonestyPanel honesty={result.honesty} variations={variations} />
       </div>
-      <div className="text-muted-foreground flex flex-col gap-1 border-l-2 pl-4 text-sm">
-        <h3 className="text-foreground font-semibold">How this was tested</h3>
-        <p>
-          Fills at the {result.honesty.fill_model}; costs {result.honesty.per_side_pct}% and slippage{" "}
-          {result.honesty.slippage_pct}% per side. Data {result.honesty.data_start} to {result.honesty.data_end}
-          {result.honesty.survivorship ? "; today's stock list only (survivorship bias)" : ""}
-          {result.honesty.skipped.length > 0 ? `; ${result.honesty.skipped.length} stocks with no data` : ""}.
-          Portfolio: {result.honesty.ranking_rule}.
-        </p>
-        {skippedSignalLines(result.honesty).map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-      </div>
-      <div className="flex flex-col gap-3">
-        <h3 className="text-lg font-bold">Every signal</h3>
-        <p className="text-muted-foreground -mt-2 text-sm">
-          Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
-        </p>
-        <TradeTiles stats={result.trade_stats} />
-        <TradeList trades={result.trades} />
-      </div>
-    </section>
+    </div>
   );
 }

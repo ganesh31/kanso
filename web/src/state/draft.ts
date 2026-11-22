@@ -23,7 +23,10 @@ export type Group = "all" | "any";
  * switched-off conditions, so a toggle can be undone and survives in the `?draft=` link.
  */
 export interface Draft {
+  /** The saved system's id, once saved. */
   id?: string;
+  /** A generated id for an unsaved draft, so its variations are counted across reloads of its link. */
+  draftId?: string;
   name: string;
   universe: string;
   timeframe: SystemTimeframe;
@@ -136,6 +139,16 @@ export function systemReducer(d: Draft, a: DraftAction): Draft {
   }
 }
 
+/** The id the draft's variations are counted under: the saved system's, else the draft's own. */
+export function variationsKey(d: Draft): string {
+  return d.id ?? d.draftId ?? "draft";
+}
+
+/** A new id for an unsaved draft (randomUUID needs a secure context, so it isn't relied on). */
+export function newDraftId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 /**
  * Which conditions are where, and which are switched on. Field errors are mapped by position, so
  * they are shown only while this is what it was when the request was sent.
@@ -196,6 +209,7 @@ const conditionSchema = z.object({
 
 const draftSchema = z.object({
   id: z.string().optional(),
+  draftId: z.string().optional(),
   name: z.string(),
   universe: z.string(),
   timeframe: z.enum(SystemTimeframe),
