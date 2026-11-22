@@ -1,0 +1,19 @@
+# Only what the three stages copy: web/, go.mod/go.sum, cmd/, internal/ and
+# the demo snapshot.
+**
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!web/
+!deploy/demo.db
+
+# Never send local builds, dependencies or databases.
+**/node_modules
+web/dist
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+**/*.db-wal
+**/*.db-shm
+**/*_test.go
+**/testdata
