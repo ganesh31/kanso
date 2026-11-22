@@ -276,6 +276,10 @@ func candidates(sigs []int, ctx *patterns.Context, daily *market.Series, sys *ru
 			continue
 		}
 		tr.RankKey = rankKey(ctx, s)
+		if s < len(ctx.LevelIdx) && ctx.LevelIdx[s] >= 0 {
+			level, date := ctx.Level[s], ctx.Series.Bars[ctx.LevelIdx[s]].Date
+			tr.Level, tr.LevelDate = &level, &date
+		}
 		out = append(out, tr)
 	}
 	return out

@@ -113,6 +113,10 @@ export interface PortfolioTrade {
   gapped_stop: boolean;
   /** Trading days from entry to exit */
   holding_days: number;
+  /** Breakout level at the signal bar; absent when the rule has none */
+  level?: number;
+  /** Date the breakout level was set */
+  level_date?: string;
   /** Whole shares bought */
   quantity: number;
   /** Per-share return in percent, net of costs and slippage */
@@ -208,6 +212,10 @@ export interface Trade {
   gapped_stop: boolean;
   /** Trading days from entry to exit */
   holding_days: number;
+  /** Breakout level at the signal bar; absent when the rule has none */
+  level?: number;
+  /** Date the breakout level was set */
+  level_date?: string;
   /** Per-share return in percent, net of costs and slippage */
   return_pct: number;
   /** Signal bar (weekly: the signal week's last trading day) */

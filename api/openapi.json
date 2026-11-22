@@ -832,6 +832,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "level": {
+            "description": "Breakout level at the signal bar; absent when the rule has none",
+            "format": "double",
+            "type": "number"
+          },
+          "level_date": {
+            "description": "Date the breakout level was set",
+            "format": "date",
+            "type": "string"
+          },
           "quantity": {
             "description": "Whole shares bought",
             "format": "int64",
@@ -1261,6 +1271,16 @@
             "description": "Trading days from entry to exit",
             "format": "int64",
             "type": "integer"
+          },
+          "level": {
+            "description": "Breakout level at the signal bar; absent when the rule has none",
+            "format": "double",
+            "type": "number"
+          },
+          "level_date": {
+            "description": "Date the breakout level was set",
+            "format": "date",
+            "type": "string"
           },
           "return_pct": {
             "description": "Per-share return in percent, net of costs and slippage",
