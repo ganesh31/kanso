@@ -146,8 +146,10 @@ func TestRankKeyIgnoresRule(t *testing.T) {
 		{ID: 3, Symbol: market.Benchmark, Type: market.Index},
 	}, map[string][]market.Bar{"AAA": flat, "ZZZ": breakoutBars(60), market.Benchmark: bench},
 		map[string][]string{"TEST": {"AAA", "ZZZ"}})
-	s := rules.System{Name: "no rs", Universe: "TEST", Entry: rules.Entry{All: []rules.Condition{{Type: "n_year_high"}}},
-		Portfolio: rules.Portfolio{MaxPositions: 1}}
+	s := rules.System{
+		Name: "no rs", Universe: "TEST", Entry: rules.Entry{All: []rules.Condition{{Type: "n_year_high"}}},
+		Portfolio: rules.Portfolio{MaxPositions: 1},
+	}
 	res, err := Run(context.Background(), prov, s, "", "")
 	if err != nil {
 		t.Fatal(err)

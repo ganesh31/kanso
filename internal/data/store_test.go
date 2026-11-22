@@ -185,6 +185,48 @@ func TestExportParquetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestImportParquetBuildsStoreAndUniverse(t *testing.T) {
+	ctx := context.Background()
+	src, _ := openTemp(t)
+	tcs, nsei := addInstrument(t, src, "TCS"), addInstrument(t, src, market.Benchmark)
+	if err := src.UpsertBars(ctx, tcs, bars(3, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if err := src.UpsertBars(ctx, nsei, bars(3, 100)); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := src.ExportParquet(ctx, []string{"TCS", market.Benchmark}, "", "9999-12-31", &buf); err != nil {
+		t.Fatal(err)
+	}
+
+	dst, _ := openTemp(t)
+	if err := dst.ImportParquet(ctx, bytes.NewReader(buf.Bytes()), "NIFTY50"); err != nil {
+		t.Fatal(err)
+	}
+	members, _, err := dst.Universe(ctx, "NIFTY50")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0].Symbol != "TCS" || members[0].Type != market.Equity {
+		t.Fatalf("universe members = %+v, want only TCS as an equity", members)
+	}
+	bench, err := dst.Instrument(ctx, market.Benchmark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bench.Type != market.Index {
+		t.Fatalf("benchmark type = %q, want index", bench.Type)
+	}
+	got, err := dst.Daily(ctx, members[0].ID, "", "9999-12-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(bars(3, 10), got); diff != "" {
+		t.Fatalf("TCS bars (-want +got):\n%s", diff)
+	}
+}
+
 func TestWALReaderDuringWrite(t *testing.T) {
 	ctx := context.Background()
 	rw, path := openTemp(t)
@@ -229,7 +271,7 @@ func TestWALReaderDuringWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rtx.Rollback()
+	defer func() { _ = rtx.Rollback() }()
 	var n int
 	if err := rtx.QueryRowContext(ctx, "SELECT count(*) FROM bars_daily").Scan(&n); err != nil {
 		t.Fatal(err)

@@ -98,7 +98,11 @@ export function PriceChart({ bars, level, markers }: { bars: Bar[]; level?: numb
   }, [bars]);
 
   useEffect(() => {
-    markerApi.current?.setMarkers(seriesMarkers(bars, markers ?? []));
+    const api = markerApi.current;
+    if (!api) return;
+    api.setMarkers(seriesMarkers(bars, markers ?? []));
+    // The markers are drawn on a canvas; this lets tests (and DevTools) see how many the chart holds.
+    if (el.current) el.current.dataset.markers = String(api.markers().length);
   }, [bars, markers]);
 
   useEffect(() => {
