@@ -2,6 +2,7 @@ package patterns
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -100,6 +101,57 @@ func TestNYearHighWindowDropsOldestBar(t *testing.T) {
 	}
 }
 
+// weeklySeries resamples dailyWeeks(n, weekHigh) to weekly.
+func weeklySeries(n int, weekHigh map[int]float64) *market.Series {
+	return market.ToWeekly(dailyWeeks(n, weekHigh))
+}
+
+// dailyWeeks is n weeks of Mon–Fri daily bars from Mon 2024-01-01, plus
+// one Monday so the last full week is complete. Every bar has high 100 and
+// close 99 except where weekHigh sets a whole week's high.
+func dailyWeeks(n int, weekHigh map[int]float64) *market.Series {
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	var bars []market.Bar
+	for w := 0; w <= n; w++ {
+		days := 5
+		if w == n {
+			days = 1
+		}
+		for d := range days {
+			h := 100.0
+			if v, ok := weekHigh[w]; ok {
+				h = v
+			}
+			dt := market.Date(start.AddDate(0, 0, 7*w+d).Format(market.DateLayout))
+			bars = append(bars, market.Bar{Date: dt, Open: 99, High: h, Low: 99, Close: 99, Volume: 1000})
+		}
+	}
+	return market.NewDaily(market.Instrument{ID: 1, Symbol: "TEST"}, bars)
+}
+
+func TestNYearHighWeeklyUses52PerYear(t *testing.T) {
+	s := weeklySeries(54, map[int]float64{0: 110})
+	if s.Complete != 54 {
+		t.Fatalf("Complete = %d, want 54", s.Complete)
+	}
+	r, _ := evalNYH(t, s, Params{"years": 1.0}, 51)
+	if r.Evaluable {
+		t.Fatalf("t=51: got %+v, want insufficient history (needs 52 prior weeks)", r)
+	}
+	r, _ = evalNYH(t, s, Params{"years": 1.0}, 52)
+	if ev := r.Evidence.(NYearHighEvidence); ev.Level != 110 || ev.BarsSince != 52 {
+		t.Fatalf("t=52: got %+v, want level 110 set 52 weeks ago", r)
+	}
+	r, _ = evalNYH(t, s, Params{"years": 1.0}, 53)
+	if ev := r.Evidence.(NYearHighEvidence); ev.Level != 100 {
+		t.Fatalf("t=53: got %+v, want week 0 out of the 52-week window", r)
+	}
+	r, _ = evalNYH(t, s, Params{"years": 1.0}, 54)
+	if r.Evaluable || r.Evidence.(NotEvaluable).Reason != ReasonIncompleteBar {
+		t.Fatalf("t=54 (forming week): got %+v, want incomplete_bar", r)
+	}
+}
+
 func TestNYearHighInsufficientHistory(t *testing.T) {
 	r, _ := evalNYH(t, oneYearWithHigh(111, 111), Params{"years": 1.0}, 251)
 	want := Result{Evidence: NotEvaluable{Type: TypeNotEvaluable, Reason: ReasonInsufficientHistory}}
@@ -156,6 +208,43 @@ func TestNYearHighZeroLevelNotEvaluable(t *testing.T) {
 	}
 	if ev, ok := r.Evidence.(NYearHighEvidence); ok && math.IsInf(ev.PctAbove, 0) {
 		t.Fatal("Inf in evidence")
+	}
+}
+
+// markGapBefore moves bars bar… six days later and marks gaps against a
+// calendar of every day, so a 6-day data gap is recorded at bar.
+func markGapBefore(s *market.Series, bar int) *market.Series {
+	for i := bar; i < len(s.Bars); i++ {
+		s.Bars[i].Date = date(i + 6)
+	}
+	cal := make([]market.Date, len(s.Bars)+6)
+	for i := range cal {
+		cal[i] = date(i)
+	}
+	s.MarkGaps(cal, 5)
+	return s
+}
+
+func TestNYearHighDataGapInsideWindow(t *testing.T) {
+	r, _ := evalNYH(t, markGapBefore(oneYearWithHigh(111, 111), 200), Params{"years": 1.0}, 252)
+	want := Result{Evidence: NotEvaluable{Type: TypeNotEvaluable, Reason: ReasonDataGap}}
+	if diff := cmp.Diff(want, r); diff != "" {
+		t.Fatalf("(-want +got):\n%s", diff)
+	}
+}
+
+func TestNYearHighDataGapBeforeWindowIsIgnored(t *testing.T) {
+	highs, closes := flat(300)
+	closes[299] = 101
+	// The window of bar 299 is bars 47…298 plus today; a gap recorded at
+	// bar 47 lies before the window's first bar, one at bar 48 inside it.
+	r, _ := evalNYH(t, markGapBefore(dailySeries(highs, closes), 47), Params{"years": 1.0}, 299)
+	if !r.Evaluable || !r.Pass {
+		t.Fatalf("gap at bar 47: got %+v, want evaluable pass", r)
+	}
+	r, _ = evalNYH(t, markGapBefore(dailySeries(highs, closes), 48), Params{"years": 1.0}, 299)
+	if r.Evaluable || r.Evidence.(NotEvaluable).Reason != ReasonDataGap {
+		t.Fatalf("gap at bar 48: got %+v, want data_gap", r)
 	}
 }
 
@@ -216,5 +305,85 @@ func TestLoadBuildsDailyContextAlignedToBench(t *testing.T) {
 	}
 	if diff := cmp.Diff([]int{0, -1, 2}, pctx.BenchIdx); diff != "" {
 		t.Fatalf("BenchIdx (-want +got):\n%s", diff)
+	}
+}
+
+func TestLoadBuildsWeeklyAlignedByISOWeek(t *testing.T) {
+	insts := []market.Instrument{{ID: 1, Symbol: "TCS"}, {ID: 2, Symbol: "^NSEI", Type: market.Index}}
+	bars := map[string][]market.Bar{
+		// TCS skips Fri 5 Jan; the bench has no bar in the week of 15 Jan.
+		"TCS": {
+			{Date: "2024-01-01"}, {Date: "2024-01-04"},
+			{Date: "2024-01-08"}, {Date: "2024-01-12"},
+			{Date: "2024-01-16"},
+			{Date: "2024-01-22"},
+		},
+		"^NSEI": {
+			{Date: "2024-01-01"}, {Date: "2024-01-05"},
+			{Date: "2024-01-09"}, {Date: "2024-01-12"},
+			{Date: "2024-01-22"},
+		},
+	}
+	prov := market.NewMemProvider(insts, bars, nil)
+	bench := market.NewDaily(insts[1], bars["^NSEI"])
+	pctx, daily, err := Load(context.Background(), prov, insts[0], bench, market.Weekly, "2024-01-01", "2024-01-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if daily.Timeframe != market.Daily || len(daily.Bars) != 6 {
+		t.Fatalf("daily = %+v", daily)
+	}
+	s := pctx.Series
+	if s.Timeframe != market.Weekly || len(s.Bars) != 4 || s.Complete != 3 {
+		t.Fatalf("series: timeframe %q, %d bars, Complete %d; want weekly, 4, 3", s.Timeframe, len(s.Bars), s.Complete)
+	}
+	if pctx.Bench.Timeframe != market.Weekly || len(pctx.Bench.Bars) != 3 {
+		t.Fatalf("bench: timeframe %q, %d bars; want weekly, 3", pctx.Bench.Timeframe, len(pctx.Bench.Bars))
+	}
+	// Weeks end on different days (TCS Thu 4 Jan, bench Fri 5 Jan) yet align.
+	if diff := cmp.Diff([]int{0, 1, -1, 2}, pctx.BenchIdx); diff != "" {
+		t.Fatalf("BenchIdx (-want +got):\n%s", diff)
+	}
+}
+
+func TestLoadMarksGapsAndBuildsWeekly(t *testing.T) {
+	// The bench trades every day of January 2024; TCS misses 8–14 Jan
+	// (7 days, more than MaxMissingDays), so the gap is recorded at its
+	// 15 Jan bar, the first bar of ISO week 3.
+	insts := []market.Instrument{{ID: 1, Symbol: "TCS"}, {ID: 2, Symbol: "^NSEI", Type: market.Index}}
+	var stock, bench []market.Bar
+	for d := 1; d <= 31; d++ {
+		b := market.Bar{Date: market.Date(fmt.Sprintf("2024-01-%02d", d)), Open: 1, High: 1, Low: 1, Close: 1}
+		bench = append(bench, b)
+		if d < 8 || d > 14 {
+			stock = append(stock, b)
+		}
+	}
+	prov := market.NewMemProvider(insts, map[string][]market.Bar{"TCS": stock, "^NSEI": bench}, nil)
+	benchDaily := market.NewDaily(insts[1], bench)
+
+	pctx, daily, err := Load(context.Background(), prov, insts[0], benchDaily, market.Weekly, "", "2024-01-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := daily.GapsIn(0, len(daily.Bars)-1); got != 1 {
+		t.Fatalf("daily GapsIn = %d, want 1", got)
+	}
+	w := pctx.Series
+	if got := w.GapsIn(0, len(w.Bars)-1); got != 1 {
+		t.Fatalf("weekly GapsIn = %d, want 1", got)
+	}
+	// Weekly bars: ISO weeks 1, 3, 4, 5. The gap sits at bar 1 (week 3).
+	if w.GapsIn(1, len(w.Bars)-1) != 0 || w.GapsIn(0, 1) != 1 {
+		t.Fatalf("weekly gap not at bar 1: GapsIn(1,last)=%d GapsIn(0,1)=%d", w.GapsIn(1, len(w.Bars)-1), w.GapsIn(0, 1))
+	}
+
+	// Without a benchmark there is no calendar, so no gaps.
+	pctx, _, err = Load(context.Background(), prov, insts[0], nil, market.Daily, "", "2024-01-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pctx.Series.GapsIn(0, len(pctx.Series.Bars)-1); got != 0 {
+		t.Fatalf("no bench: GapsIn = %d, want 0", got)
 	}
 }

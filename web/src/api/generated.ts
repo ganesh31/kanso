@@ -6,22 +6,231 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import { apiFetch } from './fetcher.ts';
 import type { ErrorType } from './fetcher.ts';
+export interface EquityPoint {
+  date: string;
+  /** Rupees */
+  value: number;
+}
+
+export type SkippedInstrumentReason = typeof SkippedInstrumentReason[keyof typeof SkippedInstrumentReason];
+
+
+export const SkippedInstrumentReason = {
+  no_data: 'no_data',
+} as const;
+
+export interface SkippedInstrument {
+  reason: SkippedInstrumentReason;
+  symbol: string;
+}
+
+export type SkippedSignalReason = typeof SkippedSignalReason[keyof typeof SkippedSignalReason];
+
+
+export const SkippedSignalReason = {
+  price_above_slot: 'price_above_slot',
+  insufficient_cash: 'insufficient_cash',
+} as const;
+
+export interface SkippedSignal {
+  entry_date: string;
+  reason: SkippedSignalReason;
+  symbol: string;
+}
+
+export interface Honesty {
+  adjustment: string;
+  data_end: string;
+  data_source: string;
+  /** First date used: the later of the requested start and the benchmark's first date */
+  data_start: string;
+  fill_model: string;
+  per_side_pct: number;
+  /** How crowded entry days are ranked */
+  ranking_rule: string;
+  skipped: SkippedInstrument[];
+  /** Portfolio signals skipped with a slot free, by entry date */
+  skipped_signals: SkippedSignal[];
+  slippage_pct: number;
+  /** True when the stock list is today's members only */
+  survivorship: boolean;
+}
+
+export interface PortfolioStats {
+  /** Buy-and-hold Nifty 50's CAGR, a fraction */
+  bench_cagr: number;
+  /** Buy-and-hold Nifty 50's max drawdown, a fraction ≤ 0 */
+  bench_max_drawdown: number;
+  /** Compound annual growth rate, a fraction (0.12 is 12%) */
+  cagr: number;
+  /** Fraction of trading days with a position held, 0–1 */
+  exposure: number;
+  /** Rupees at the last close */
+  final_equity: number;
+  /** Deepest fall from a peak, a fraction ≤ 0 */
+  max_drawdown: number;
+}
+
+export type PortfolioTradeExitReason = typeof PortfolioTradeExitReason[keyof typeof PortfolioTradeExitReason];
+
+
+export const PortfolioTradeExitReason = {
+  stop: 'stop',
+  trend: 'trend',
+  open: 'open',
+} as const;
+
+export interface PortfolioTrade {
+  /** Next trading day after the signal; filled at its open */
+  entry_date: string;
+  /** Fill after slippage, before costs */
+  entry_price: number;
+  exit_date: string;
+  /** Fill after slippage, before costs; the last close for an open trade */
+  exit_price: number;
+  exit_reason: PortfolioTradeExitReason;
+  /** The day opened below the stop, so it filled at the open */
+  gapped_stop: boolean;
+  /** Trading days from entry to exit */
+  holding_days: number;
+  /** Whole shares bought */
+  quantity: number;
+  /** Per-share return in percent, net of costs and slippage */
+  return_pct: number;
+  /** Signal bar (weekly: the signal week's last trading day) */
+  signal_date: string;
+  symbol: string;
+}
+
+export interface Costs {
+  /** Brokerage and statutory charges, % per side */
+  per_side_pct: number;
+  /** Slippage, % per side */
+  slippage_pct: number;
+}
+
+export type ConditionParams = {[key: string]: unknown};
+
+export interface Condition {
+  params?: ConditionParams;
+  type: string;
+}
+
+export interface Entry {
+  all: Condition[];
+  any?: Condition[];
+}
+
+export interface Exits {
+  /** Stop-loss, % below the entry fill */
+  stop_pct: number;
+  /** Exit when a weekly close is below this SMA of weekly closes; 0 disables */
+  trend_sma_weeks: number;
+}
+
+export interface Portfolio {
+  /** Starting capital in rupees */
+  capital: number;
+  /** Maximum concurrent positions */
+  max_positions: number;
+}
+
+export type SystemTimeframe = typeof SystemTimeframe[keyof typeof SystemTimeframe];
+
+
+export const SystemTimeframe = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+export interface System {
+  costs?: Costs;
+  entry: Entry;
+  exits?: Exits;
+  id?: string;
+  name: string;
+  portfolio?: Portfolio;
+  timeframe?: SystemTimeframe;
+  universe: string;
+}
+
+export interface TradeStats {
+  avg_loss_pct: number;
+  avg_win_pct: number;
+  /** Mean return per trade, in percent */
+  expectancy_pct: number;
+  /** In trading days */
+  median_holding_days: number;
+  trades: number;
+  /** Fraction of trades with a positive return, 0–1 */
+  win_rate: number;
+}
+
+export type TradeExitReason = typeof TradeExitReason[keyof typeof TradeExitReason];
+
+
+export const TradeExitReason = {
+  stop: 'stop',
+  trend: 'trend',
+  open: 'open',
+} as const;
+
+export interface Trade {
+  /** Next trading day after the signal; filled at its open */
+  entry_date: string;
+  /** Fill after slippage, before costs */
+  entry_price: number;
+  exit_date: string;
+  /** Fill after slippage, before costs; the last close for an open trade */
+  exit_price: number;
+  exit_reason: TradeExitReason;
+  /** The day opened below the stop, so it filled at the open */
+  gapped_stop: boolean;
+  /** Trading days from entry to exit */
+  holding_days: number;
+  /** Per-share return in percent, net of costs and slippage */
+  return_pct: number;
+  /** Signal bar (weekly: the signal week's last trading day) */
+  signal_date: string;
+  symbol: string;
+}
+
+export interface BacktestResult {
+  /** Buy-and-hold Nifty 50 from the same capital, on the same dates */
+  benchmark: EquityPoint[];
+  /** Portfolio value at each close from the data start */
+  equity: EquityPoint[];
+  honesty: Honesty;
+  portfolio: PortfolioStats;
+  /** Trades the portfolio held, by entry date then rank */
+  portfolio_trades: PortfolioTrade[];
+  /** The system run, with defaults filled in */
+  system: System;
+  trade_stats: TradeStats;
+  /** Single-stock trades (no slot limits), by symbol then entry date */
+  trades: Trade[];
+}
+
 export interface Bar {
   close: number;
   date: string;
@@ -36,29 +245,13 @@ export interface BarsOutputBody {
   symbol: string;
 }
 
-export interface ErrorDetail {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
-}
+export type CondOutcomeGroup = typeof CondOutcomeGroup[keyof typeof CondOutcomeGroup];
 
-export interface ErrorModel {
-  /** A human-readable explanation specific to this occurrence of the problem. */
-  detail?: string;
-  /** Optional list of individual error details */
-  errors?: ErrorDetail[];
-  /** A URI reference that identifies the specific occurrence of the problem. */
-  instance?: string;
-  /** HTTP status code */
-  status?: number;
-  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
-  title?: string;
-  /** A URI reference to human-readable documentation for the error. */
-  type?: string;
-}
+
+export const CondOutcomeGroup = {
+  all: 'all',
+  any: 'any',
+} as const;
 
 export type NYearHighEvidenceType = typeof NYearHighEvidenceType[keyof typeof NYearHighEvidenceType];
 
@@ -74,6 +267,58 @@ export interface NYearHighEvidence {
   level_date: string;
   pct_above: number;
   type: NYearHighEvidenceType;
+}
+
+export type LevelAgeEvidenceType = typeof LevelAgeEvidenceType[keyof typeof LevelAgeEvidenceType];
+
+
+export const LevelAgeEvidenceType = {
+  level_age: 'level_age',
+} as const;
+
+export interface LevelAgeEvidence {
+  bars_since: number;
+  level_date: string;
+  type: LevelAgeEvidenceType;
+}
+
+export type NotExtendedEvidenceType = typeof NotExtendedEvidenceType[keyof typeof NotExtendedEvidenceType];
+
+
+export const NotExtendedEvidenceType = {
+  not_extended: 'not_extended',
+} as const;
+
+export interface NotExtendedEvidence {
+  pct_above: number;
+  type: NotExtendedEvidenceType;
+}
+
+export type RSEvidenceType = typeof RSEvidenceType[keyof typeof RSEvidenceType];
+
+
+export const RSEvidenceType = {
+  relative_strength: 'relative_strength',
+} as const;
+
+export interface RSEvidence {
+  bench_return: number;
+  diff: number;
+  stock_return: number;
+  type: RSEvidenceType;
+}
+
+export type VolumeEvidenceType = typeof VolumeEvidenceType[keyof typeof VolumeEvidenceType];
+
+
+export const VolumeEvidenceType = {
+  volume_surge: 'volume_surge',
+} as const;
+
+export interface VolumeEvidence {
+  avg_volume: number;
+  ratio: number;
+  type: VolumeEvidenceType;
 }
 
 export type NotEvaluableReason = typeof NotEvaluableReason[keyof typeof NotEvaluableReason];
@@ -103,7 +348,80 @@ export interface NotEvaluable {
 /**
  * Evidence behind one condition's verdict, discriminated by type.
  */
-export type Evidence = NYearHighEvidence | NotEvaluable;
+export type Evidence = NYearHighEvidence | LevelAgeEvidence | NotExtendedEvidence | RSEvidence | VolumeEvidence | NotEvaluable;
+
+export interface Result {
+  evaluable: boolean;
+  evidence: Evidence;
+  pass: boolean;
+}
+
+export interface CondOutcome {
+  condition: Condition;
+  group: CondOutcomeGroup;
+  /** Position within its group */
+  index: number;
+  result: Result;
+}
+
+export interface DefaultSystemOutputBody {
+  system: System;
+}
+
+export interface ErrorDetail {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+}
+
+export interface ErrorModel {
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /** Optional list of individual error details */
+  errors?: ErrorDetail[];
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
+}
+
+export interface Outcome {
+  /** Indexes of the ANY branches that passed */
+  any_matched: number[];
+  conditions: CondOutcome[];
+  evaluable: boolean;
+  pass: boolean;
+}
+
+export interface Match {
+  /** Bar evaluated: the as-of day, or the last complete week */
+  date: string;
+  level?: number;
+  /** Bars since the level was set */
+  level_age_bars?: number;
+  level_date?: string;
+  outcome: Outcome;
+  /** Close above the level, in percent */
+  pct_above?: number;
+  /** The rule on the week in progress (weekly only) */
+  provisional?: Outcome;
+  /** Stock return minus benchmark return, as a fraction */
+  rs_diff?: number;
+  /** Latest signal in the fresh window (fresh mode) */
+  signal_date?: string;
+  symbol: string;
+  /** First bar of the current pass streak (all mode) */
+  true_since?: string;
+  /** Volume over the prior window's average */
+  vol_ratio?: number;
+}
 
 export type ParamSpecKind = typeof ParamSpecKind[keyof typeof ParamSpecKind];
 
@@ -148,6 +466,43 @@ export interface PatternsOutputBody {
   patterns: Meta[];
 }
 
+/**
+ * fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now
+ */
+export type QuickscanRequestMode = typeof QuickscanRequestMode[keyof typeof QuickscanRequestMode];
+
+
+export const QuickscanRequestMode = {
+  fresh: 'fresh',
+  all: 'all',
+} as const;
+
+/**
+ * Param values; missing ones take their defaults
+ */
+export type QuickscanRequestParams = {[key: string]: unknown};
+
+export type QuickscanRequestTimeframe = typeof QuickscanRequestTimeframe[keyof typeof QuickscanRequestTimeframe];
+
+
+export const QuickscanRequestTimeframe = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+export interface QuickscanRequest {
+  /** Scan as of this date (default: the latest benchmark date) */
+  as_of?: string;
+  /** fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now */
+  mode?: QuickscanRequestMode;
+  /** Param values; missing ones take their defaults */
+  params?: QuickscanRequestParams;
+  /** Pattern or filter type, from /api/patterns */
+  pattern: string;
+  timeframe?: QuickscanRequestTimeframe;
+  universe: string;
+}
+
 export type ReportTimeframe = typeof ReportTimeframe[keyof typeof ReportTimeframe];
 
 
@@ -155,12 +510,6 @@ export const ReportTimeframe = {
   daily: 'daily',
   weekly: 'weekly',
 } as const;
-
-export interface Result {
-  evaluable: boolean;
-  evidence: Evidence;
-  pass: boolean;
-}
 
 export type ReportLineParams = {[key: string]: unknown};
 
@@ -180,20 +529,80 @@ export interface Report {
   level_date?: string;
   lines: ReportLine[];
   symbol: string;
+  /** The system's entry rule on as_of (only with a system) */
+  system_outcome?: Outcome;
   timeframe: ReportTimeframe;
 }
 
+/**
+ * Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars. Ignored with a system, which has its own
+ */
 export type ReportRequestTimeframe = typeof ReportRequestTimeframe[keyof typeof ReportRequestTimeframe];
 
 
 export const ReportRequestTimeframe = {
   daily: 'daily',
+  weekly: 'weekly',
 } as const;
 
 export interface ReportRequest {
   /** Evaluate the last bar on or before this date (default: latest) */
   as_of?: string;
+  /** Report this system's conditions and outcome instead of every pattern; it need not be saved */
+  system?: System;
+  /** Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars. Ignored with a system, which has its own */
   timeframe?: ReportRequestTimeframe;
+}
+
+/**
+ * fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now
+ */
+export type ScanRequestMode = typeof ScanRequestMode[keyof typeof ScanRequestMode];
+
+
+export const ScanRequestMode = {
+  fresh: 'fresh',
+  all: 'all',
+} as const;
+
+export interface ScanRequest {
+  /** Scan as of this date (default: the latest benchmark date) */
+  as_of?: string;
+  /** fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now */
+  mode?: ScanRequestMode;
+  /** The system to scan; it need not be saved */
+  system: System;
+}
+
+export interface ScanResult {
+  /** Date scanned, from the data */
+  as_of: string;
+  /** Condition types added because the pattern needs them */
+  auto_inserted: string[];
+  matches: Match[];
+  /** Stocks with no bars up to as_of */
+  skipped: string[];
+  /** Stocks whose last bar is before as_of; never matched */
+  stale: string[];
+}
+
+export interface SystemsOutputBody {
+  systems: System[];
+}
+
+export interface Universe {
+  /** False when only today's members are known (survivorship bias) */
+  has_history: boolean;
+  members: number;
+  name: string;
+}
+
+export interface UniversesOutputBody {
+  universes: Universe[];
+}
+
+export interface ValidateOutputBody {
+  system: System;
 }
 
 export type GetBarsParams = {
@@ -241,6 +650,78 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getBacktestUrl = () => {
+
+
+
+
+  return `/api/backtest`
+}
+
+/**
+ * @summary Backtest a system over its stock list
+ */
+export const backtest = async (system: System, options?: Parameters<typeof apiFetch>[1]): Promise<BacktestResult> => {
+
+  return apiFetch<BacktestResult>(getBacktestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(system)
+  }
+);}
+
+
+
+
+
+export const getBacktestMutationKey = () => ['backtest'] as const;
+
+export const getBacktestMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backtest>>, TError,BacktestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof backtest>>, TError,BacktestMutationVariables, TContext> => {
+
+const mutationKey = getBacktestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof backtest>>, BacktestMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  backtest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BacktestMutationResult = NonNullable<Awaited<ReturnType<typeof backtest>>>
+    export type BacktestMutationBody = System
+    export type BacktestMutationError = ErrorType<ErrorModel>
+    export type BacktestMutationVariables = {data: System}
+
+    /** @summary Backtest a system over its stock list */
+export const useBacktest = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backtest>>, TError,BacktestMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof backtest>>,
+        TError,
+        BacktestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBacktestMutationOptions(options), queryClient);
+    }
 
 export const getGetBarsUrl = (symbol: string,
     params?: GetBarsParams,) => {
@@ -358,6 +839,107 @@ export function useGetBars<TData = Awaited<ReturnType<typeof getBars>>, TError =
 
 
 
+export const getGetDefaultSystemUrl = () => {
+
+
+
+
+  return `/api/default-system`
+}
+
+/**
+ * @summary The system the Builder opens on
+ */
+export const getDefaultSystem = async ( options?: Parameters<typeof apiFetch>[1]): Promise<DefaultSystemOutputBody> => {
+
+  return apiFetch<DefaultSystemOutputBody>(getGetDefaultSystemUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDefaultSystemQueryKey = () => {
+    return [
+    `/api/default-system`
+    ] as const;
+    }
+
+
+export const getGetDefaultSystemQueryOptions = <TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDefaultSystemQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDefaultSystem>>> = ({ signal }) => getDefaultSystem({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetDefaultSystemQueryResult = NonNullable<Awaited<ReturnType<typeof getDefaultSystem>>>
+export type GetDefaultSystemQueryError = ErrorType<ErrorModel>
+
+
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDefaultSystem>>,
+          TError,
+          Awaited<ReturnType<typeof getDefaultSystem>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDefaultSystem>>,
+          TError,
+          Awaited<ReturnType<typeof getDefaultSystem>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary The system the Builder opens on */
+export function useGetDefaultSystem<TData = Awaited<ReturnType<typeof getDefaultSystem>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDefaultSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetDefaultSystemQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListPatternsUrl = () => {
 
 
@@ -447,6 +1029,107 @@ export function useListPatterns<TData = Awaited<ReturnType<typeof listPatterns>>
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListPatternsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getQuickScanUrl = () => {
+
+
+
+
+  return `/api/quickscan`
+}
+
+/**
+ * @summary Scan a stock list for one pattern or filter
+ */
+export const quickScan = async (quickscanRequest: QuickscanRequest, options?: Parameters<typeof apiFetch>[1]): Promise<ScanResult> => {
+
+  return apiFetch<ScanResult>(getQuickScanUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(quickscanRequest)
+  }
+);}
+
+
+
+
+
+export const getQuickScanQueryKey = (quickscanRequest?: QuickscanRequest,) => {
+    return [
+    'POST', `/api/quickscan`, quickscanRequest
+    ] as const;
+    }
+
+
+export const getQuickScanQueryOptions = <TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getQuickScanQueryKey(quickscanRequest);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof quickScan>>> = ({ signal }) => quickScan(quickscanRequest, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type QuickScanQueryResult = NonNullable<Awaited<ReturnType<typeof quickScan>>>
+export type QuickScanQueryError = ErrorType<ErrorModel>
+
+
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof quickScan>>,
+          TError,
+          Awaited<ReturnType<typeof quickScan>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof quickScan>>,
+          TError,
+          Awaited<ReturnType<typeof quickScan>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a stock list for one pattern or filter */
+export function useQuickScan<TData = Awaited<ReturnType<typeof quickScan>>, TError = ErrorType<ErrorModel>>(
+ quickscanRequest: QuickscanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof quickScan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getQuickScanQueryOptions(quickscanRequest,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -560,3 +1243,702 @@ export function useStockReport<TData = Awaited<ReturnType<typeof stockReport>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
+export const getScanUrl = () => {
+
+
+
+
+  return `/api/scan`
+}
+
+/**
+ * @summary Scan a system's stock list
+ */
+export const scan = async (scanRequest: ScanRequest, options?: Parameters<typeof apiFetch>[1]): Promise<ScanResult> => {
+
+  return apiFetch<ScanResult>(getScanUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(scanRequest)
+  }
+);}
+
+
+
+
+
+export const getScanQueryKey = (scanRequest?: ScanRequest,) => {
+    return [
+    'POST', `/api/scan`, scanRequest
+    ] as const;
+    }
+
+
+export const getScanQueryOptions = <TData = Awaited<ReturnType<typeof scan>>, TError = ErrorType<ErrorModel>>(scanRequest: ScanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getScanQueryKey(scanRequest);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof scan>>> = ({ signal }) => scan(scanRequest, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof scan>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ScanQueryResult = NonNullable<Awaited<ReturnType<typeof scan>>>
+export type ScanQueryError = ErrorType<ErrorModel>
+
+
+/** @summary Scan a system's stock list */
+export function useScan<TData = Awaited<ReturnType<typeof scan>>, TError = ErrorType<ErrorModel>>(
+ scanRequest: ScanRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof scan>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof scan>>,
+          TError,
+          Awaited<ReturnType<typeof scan>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a system's stock list */
+export function useScan<TData = Awaited<ReturnType<typeof scan>>, TError = ErrorType<ErrorModel>>(
+ scanRequest: ScanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scan>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof scan>>,
+          TError,
+          Awaited<ReturnType<typeof scan>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a system's stock list */
+export function useScan<TData = Awaited<ReturnType<typeof scan>>, TError = ErrorType<ErrorModel>>(
+ scanRequest: ScanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Scan a system's stock list */
+export function useScan<TData = Awaited<ReturnType<typeof scan>>, TError = ErrorType<ErrorModel>>(
+ scanRequest: ScanRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof scan>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getScanQueryOptions(scanRequest,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListSystemsUrl = () => {
+
+
+
+
+  return `/api/systems`
+}
+
+/**
+ * @summary List saved systems
+ */
+export const listSystems = async ( options?: Parameters<typeof apiFetch>[1]): Promise<SystemsOutputBody> => {
+
+  return apiFetch<SystemsOutputBody>(getListSystemsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSystemsQueryKey = () => {
+    return [
+    `/api/systems`
+    ] as const;
+    }
+
+
+export const getListSystemsQueryOptions = <TData = Awaited<ReturnType<typeof listSystems>>, TError = ErrorType<ErrorModel>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSystems>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSystemsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSystems>>> = ({ signal }) => listSystems({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSystems>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListSystemsQueryResult = NonNullable<Awaited<ReturnType<typeof listSystems>>>
+export type ListSystemsQueryError = ErrorType<ErrorModel>
+
+
+/** @summary List saved systems */
+export function useListSystems<TData = Awaited<ReturnType<typeof listSystems>>, TError = ErrorType<ErrorModel>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSystems>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSystems>>,
+          TError,
+          Awaited<ReturnType<typeof listSystems>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List saved systems */
+export function useListSystems<TData = Awaited<ReturnType<typeof listSystems>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSystems>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSystems>>,
+          TError,
+          Awaited<ReturnType<typeof listSystems>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List saved systems */
+export function useListSystems<TData = Awaited<ReturnType<typeof listSystems>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSystems>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List saved systems */
+export function useListSystems<TData = Awaited<ReturnType<typeof listSystems>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSystems>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListSystemsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSystemUrl = () => {
+
+
+
+
+  return `/api/systems`
+}
+
+/**
+ * @summary Save a new system
+ */
+export const createSystem = async (system: System, options?: Parameters<typeof apiFetch>[1]): Promise<System> => {
+
+  return apiFetch<System>(getCreateSystemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(system)
+  }
+);}
+
+
+
+
+
+export const getCreateSystemMutationKey = () => ['createSystem'] as const;
+
+export const getCreateSystemMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSystem>>, TError,CreateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSystem>>, TError,CreateSystemMutationVariables, TContext> => {
+
+const mutationKey = getCreateSystemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSystem>>, CreateSystemMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSystem(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSystemMutationResult = NonNullable<Awaited<ReturnType<typeof createSystem>>>
+    export type CreateSystemMutationBody = System
+    export type CreateSystemMutationError = ErrorType<ErrorModel>
+    export type CreateSystemMutationVariables = {data: System}
+
+    /** @summary Save a new system */
+export const useCreateSystem = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSystem>>, TError,CreateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createSystem>>,
+        TError,
+        CreateSystemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateSystemMutationOptions(options), queryClient);
+    }
+
+export const getDeleteSystemUrl = (id: string,) => {
+
+
+
+
+  return `/api/systems/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary Delete a saved system
+ */
+export const deleteSystem = async (id: string, options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getDeleteSystemUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSystemMutationKey = () => ['deleteSystem'] as const;
+
+export const getDeleteSystemMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSystem>>, TError,DeleteSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSystem>>, TError,DeleteSystemMutationVariables, TContext> => {
+
+const mutationKey = getDeleteSystemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSystem>>, DeleteSystemMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteSystem(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSystemMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSystem>>>
+
+    export type DeleteSystemMutationError = ErrorType<ErrorModel>
+    export type DeleteSystemMutationVariables = {id: string}
+
+    /** @summary Delete a saved system */
+export const useDeleteSystem = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSystem>>, TError,DeleteSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSystem>>,
+        TError,
+        DeleteSystemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteSystemMutationOptions(options), queryClient);
+    }
+
+export const getGetSystemUrl = (id: string,) => {
+
+
+
+
+  return `/api/systems/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary Get a saved system
+ */
+export const getSystem = async (id: string, options?: Parameters<typeof apiFetch>[1]): Promise<System> => {
+
+  return apiFetch<System>(getGetSystemUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSystemQueryKey = (id: string,) => {
+    return [
+    `/api/systems/${id}`
+    ] as const;
+    }
+
+
+export const getGetSystemQueryOptions = <TData = Awaited<ReturnType<typeof getSystem>>, TError = ErrorType<ErrorModel>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSystemQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSystem>>> = ({ signal }) => getSystem(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSystem>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSystemQueryResult = NonNullable<Awaited<ReturnType<typeof getSystem>>>
+export type GetSystemQueryError = ErrorType<ErrorModel>
+
+
+/** @summary Get a saved system */
+export function useGetSystem<TData = Awaited<ReturnType<typeof getSystem>>, TError = ErrorType<ErrorModel>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystem>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSystem>>,
+          TError,
+          Awaited<ReturnType<typeof getSystem>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Get a saved system */
+export function useGetSystem<TData = Awaited<ReturnType<typeof getSystem>>, TError = ErrorType<ErrorModel>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystem>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSystem>>,
+          TError,
+          Awaited<ReturnType<typeof getSystem>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Get a saved system */
+export function useGetSystem<TData = Awaited<ReturnType<typeof getSystem>>, TError = ErrorType<ErrorModel>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary Get a saved system */
+export function useGetSystem<TData = Awaited<ReturnType<typeof getSystem>>, TError = ErrorType<ErrorModel>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystem>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSystemQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSystemUrl = (id: string,) => {
+
+
+
+
+  return `/api/systems/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary Replace a saved system
+ */
+export const updateSystem = async (id: string,
+    system: System, options?: Parameters<typeof apiFetch>[1]): Promise<System> => {
+
+  return apiFetch<System>(getUpdateSystemUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(system)
+  }
+);}
+
+
+
+
+
+export const getUpdateSystemMutationKey = () => ['updateSystem'] as const;
+
+export const getUpdateSystemMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSystem>>, TError,UpdateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSystem>>, TError,UpdateSystemMutationVariables, TContext> => {
+
+const mutationKey = getUpdateSystemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSystem>>, UpdateSystemMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateSystem(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSystemMutationResult = NonNullable<Awaited<ReturnType<typeof updateSystem>>>
+    export type UpdateSystemMutationBody = System
+    export type UpdateSystemMutationError = ErrorType<ErrorModel>
+    export type UpdateSystemMutationVariables = {id: string;data: System}
+
+    /** @summary Replace a saved system */
+export const useUpdateSystem = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSystem>>, TError,UpdateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateSystem>>,
+        TError,
+        UpdateSystemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateSystemMutationOptions(options), queryClient);
+    }
+
+export const getListUniversesUrl = () => {
+
+
+
+
+  return `/api/universes`
+}
+
+/**
+ * @summary List every stock list
+ */
+export const listUniverses = async ( options?: Parameters<typeof apiFetch>[1]): Promise<UniversesOutputBody> => {
+
+  return apiFetch<UniversesOutputBody>(getListUniversesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUniversesQueryKey = () => {
+    return [
+    `/api/universes`
+    ] as const;
+    }
+
+
+export const getListUniversesQueryOptions = <TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUniversesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUniverses>>> = ({ signal }) => listUniverses({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListUniversesQueryResult = NonNullable<Awaited<ReturnType<typeof listUniverses>>>
+export type ListUniversesQueryError = ErrorType<ErrorModel>
+
+
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listUniverses>>,
+          TError,
+          Awaited<ReturnType<typeof listUniverses>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listUniverses>>,
+          TError,
+          Awaited<ReturnType<typeof listUniverses>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every stock list */
+export function useListUniverses<TData = Awaited<ReturnType<typeof listUniverses>>, TError = ErrorType<ErrorModel>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listUniverses>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListUniversesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getValidateSystemUrl = () => {
+
+
+
+
+  return `/api/validate`
+}
+
+/**
+ * @summary Validate a system and return it with defaults filled in
+ */
+export const validateSystem = async (system: System, options?: Parameters<typeof apiFetch>[1]): Promise<ValidateOutputBody> => {
+
+  return apiFetch<ValidateOutputBody>(getValidateSystemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(system)
+  }
+);}
+
+
+
+
+
+export const getValidateSystemMutationKey = () => ['validateSystem'] as const;
+
+export const getValidateSystemMutationOptions = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateSystem>>, TError,ValidateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateSystem>>, TError,ValidateSystemMutationVariables, TContext> => {
+
+const mutationKey = getValidateSystemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateSystem>>, ValidateSystemMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  validateSystem(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateSystemMutationResult = NonNullable<Awaited<ReturnType<typeof validateSystem>>>
+    export type ValidateSystemMutationBody = System
+    export type ValidateSystemMutationError = ErrorType<ErrorModel>
+    export type ValidateSystemMutationVariables = {data: System}
+
+    /** @summary Validate a system and return it with defaults filled in */
+export const useValidateSystem = <TError = ErrorType<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateSystem>>, TError,ValidateSystemMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof validateSystem>>,
+        TError,
+        ValidateSystemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getValidateSystemMutationOptions(options), queryClient);
+    }

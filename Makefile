@@ -30,9 +30,14 @@ web:
 build:
 	go build -trimpath -o bin/server ./cmd/server
 
-# Serve the API and built web app on :8080 from a CSV of daily bars: make run CSV=bars.csv
+# Serve the API and built web app on 127.0.0.1:8080 from an ingested database: make run DB=kanso.db
 run: build
-	./bin/server -csv $(CSV)
+	./bin/server -db $(DB)
 
-sqlc benchmark e2e demo-snapshot:
+# Regenerate internal/data/db from the SQL (sqlc v1.31.1:
+# CGO_ENABLED=1 go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1).
+sqlc:
+	sqlc generate -f internal/data/sqlc.yaml
+
+benchmark e2e demo-snapshot:
 	@echo "make $@: not implemented yet (later V1 ticket)"; exit 1

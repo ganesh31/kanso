@@ -10,11 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BuilderRouteImport } from './routes/builder'
+import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as ReportSymbolRouteImport } from './routes/report.$symbol'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BuilderRoute = BuilderRouteImport.update({
+  id: '/builder',
+  path: '/builder',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerRoute = ScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportSymbolRoute = ReportSymbolRouteImport.update({
@@ -25,27 +37,35 @@ const ReportSymbolRoute = ReportSymbolRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/builder': typeof BuilderRoute
+  '/scanner': typeof ScannerRoute
   '/report/$symbol': typeof ReportSymbolRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/builder': typeof BuilderRoute
+  '/scanner': typeof ScannerRoute
   '/report/$symbol': typeof ReportSymbolRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/builder': typeof BuilderRoute
+  '/scanner': typeof ScannerRoute
   '/report/$symbol': typeof ReportSymbolRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/report/$symbol'
+  fullPaths: '/' | '/builder' | '/scanner' | '/report/$symbol'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/report/$symbol'
-  id: '__root__' | '/' | '/report/$symbol'
+  to: '/' | '/builder' | '/scanner' | '/report/$symbol'
+  id: '__root__' | '/' | '/builder' | '/scanner' | '/report/$symbol'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BuilderRoute: typeof BuilderRoute
+  ScannerRoute: typeof ScannerRoute
   ReportSymbolRoute: typeof ReportSymbolRoute
 }
 
@@ -56,6 +76,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/builder': {
+      id: '/builder'
+      path: '/builder'
+      fullPath: '/builder'
+      preLoaderRoute: typeof BuilderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scanner': {
+      id: '/scanner'
+      path: '/scanner'
+      fullPath: '/scanner'
+      preLoaderRoute: typeof ScannerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report/$symbol': {
@@ -70,6 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BuilderRoute: BuilderRoute,
+  ScannerRoute: ScannerRoute,
   ReportSymbolRoute: ReportSymbolRoute,
 }
 export const routeTree = rootRouteImport

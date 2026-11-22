@@ -1,6 +1,63 @@
 {
   "components": {
     "schemas": {
+      "BacktestResult": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark": {
+            "description": "Buy-and-hold Nifty 50 from the same capital, on the same dates",
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "type": "array"
+          },
+          "equity": {
+            "description": "Portfolio value at each close from the data start",
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "type": "array"
+          },
+          "honesty": {
+            "$ref": "#/components/schemas/Honesty"
+          },
+          "portfolio": {
+            "$ref": "#/components/schemas/PortfolioStats"
+          },
+          "portfolio_trades": {
+            "description": "Trades the portfolio held, by entry date then rank",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioTrade"
+            },
+            "type": "array"
+          },
+          "system": {
+            "$ref": "#/components/schemas/System",
+            "description": "The system run, with defaults filled in"
+          },
+          "trade_stats": {
+            "$ref": "#/components/schemas/TradeStats"
+          },
+          "trades": {
+            "description": "Single-stock trades (no slot limits), by symbol then entry date",
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "system",
+          "trades",
+          "trade_stats",
+          "portfolio_trades",
+          "portfolio",
+          "equity",
+          "benchmark",
+          "honesty"
+        ],
+        "type": "object"
+      },
       "Bar": {
         "additionalProperties": false,
         "properties": {
@@ -54,6 +111,124 @@
         "required": [
           "symbol",
           "bars"
+        ],
+        "type": "object"
+      },
+      "CondOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/Condition"
+          },
+          "group": {
+            "enum": [
+              "all",
+              "any"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "description": "Position within its group",
+            "format": "int64",
+            "type": "integer"
+          },
+          "result": {
+            "$ref": "#/components/schemas/Result"
+          }
+        },
+        "required": [
+          "group",
+          "index",
+          "condition",
+          "result"
+        ],
+        "type": "object"
+      },
+      "Condition": {
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Costs": {
+        "additionalProperties": false,
+        "properties": {
+          "per_side_pct": {
+            "description": "Brokerage and statutory charges, % per side",
+            "format": "double",
+            "type": "number"
+          },
+          "slippage_pct": {
+            "description": "Slippage, % per side",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "per_side_pct",
+          "slippage_pct"
+        ],
+        "type": "object"
+      },
+      "DefaultSystemOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "system": {
+            "$ref": "#/components/schemas/System"
+          }
+        },
+        "required": [
+          "system"
+        ],
+        "type": "object"
+      },
+      "Entry": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "type": "array"
+          },
+          "any": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "all"
+        ],
+        "type": "object"
+      },
+      "EquityPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "type": "string"
+          },
+          "value": {
+            "description": "Rupees",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "value"
         ],
         "type": "object"
       },
@@ -130,8 +305,12 @@
         "description": "Evidence behind one condition's verdict, discriminated by type.",
         "discriminator": {
           "mapping": {
+            "level_age": "#/components/schemas/LevelAgeEvidence",
             "n_year_high": "#/components/schemas/NYearHighEvidence",
-            "not_evaluable": "#/components/schemas/NotEvaluable"
+            "not_evaluable": "#/components/schemas/NotEvaluable",
+            "not_extended": "#/components/schemas/NotExtendedEvidence",
+            "relative_strength": "#/components/schemas/RSEvidence",
+            "volume_surge": "#/components/schemas/VolumeEvidence"
           },
           "propertyName": "type"
         },
@@ -140,9 +319,189 @@
             "$ref": "#/components/schemas/NYearHighEvidence"
           },
           {
+            "$ref": "#/components/schemas/LevelAgeEvidence"
+          },
+          {
+            "$ref": "#/components/schemas/NotExtendedEvidence"
+          },
+          {
+            "$ref": "#/components/schemas/RSEvidence"
+          },
+          {
+            "$ref": "#/components/schemas/VolumeEvidence"
+          },
+          {
             "$ref": "#/components/schemas/NotEvaluable"
           }
         ]
+      },
+      "Exits": {
+        "additionalProperties": false,
+        "properties": {
+          "stop_pct": {
+            "description": "Stop-loss, % below the entry fill",
+            "format": "double",
+            "type": "number"
+          },
+          "trend_sma_weeks": {
+            "description": "Exit when a weekly close is below this SMA of weekly closes; 0 disables",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stop_pct",
+          "trend_sma_weeks"
+        ],
+        "type": "object"
+      },
+      "Honesty": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment": {
+            "type": "string"
+          },
+          "data_end": {
+            "type": "string"
+          },
+          "data_source": {
+            "type": "string"
+          },
+          "data_start": {
+            "description": "First date used: the later of the requested start and the benchmark's first date",
+            "type": "string"
+          },
+          "fill_model": {
+            "type": "string"
+          },
+          "per_side_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "ranking_rule": {
+            "description": "How crowded entry days are ranked",
+            "type": "string"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedInstrument"
+            },
+            "type": "array"
+          },
+          "skipped_signals": {
+            "description": "Portfolio signals skipped with a slot free, by entry date",
+            "items": {
+              "$ref": "#/components/schemas/SkippedSignal"
+            },
+            "type": "array"
+          },
+          "slippage_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "survivorship": {
+            "description": "True when the stock list is today's members only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fill_model",
+          "per_side_pct",
+          "slippage_pct",
+          "survivorship",
+          "data_source",
+          "adjustment",
+          "data_start",
+          "data_end",
+          "ranking_rule",
+          "skipped",
+          "skipped_signals"
+        ],
+        "type": "object"
+      },
+      "LevelAgeEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bars_since": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "level_date": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "level_age"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "bars_since",
+          "level_date"
+        ],
+        "type": "object"
+      },
+      "Match": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "description": "Bar evaluated: the as-of day, or the last complete week",
+            "type": "string"
+          },
+          "level": {
+            "format": "double",
+            "type": "number"
+          },
+          "level_age_bars": {
+            "description": "Bars since the level was set",
+            "format": "int64",
+            "type": "integer"
+          },
+          "level_date": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/Outcome"
+          },
+          "pct_above": {
+            "description": "Close above the level, in percent",
+            "format": "double",
+            "type": "number"
+          },
+          "provisional": {
+            "$ref": "#/components/schemas/Outcome",
+            "description": "The rule on the week in progress (weekly only)"
+          },
+          "rs_diff": {
+            "description": "Stock return minus benchmark return, as a fraction",
+            "format": "double",
+            "type": "number"
+          },
+          "signal_date": {
+            "description": "Latest signal in the fresh window (fresh mode)",
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "true_since": {
+            "description": "First bar of the current pass streak (all mode)",
+            "type": "string"
+          },
+          "vol_ratio": {
+            "description": "Volume over the prior window's average",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "symbol",
+          "date",
+          "outcome"
+        ],
+        "type": "object"
       },
       "Meta": {
         "additionalProperties": false,
@@ -251,6 +610,58 @@
         ],
         "type": "object"
       },
+      "NotExtendedEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "pct_above": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "not_extended"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "pct_above"
+        ],
+        "type": "object"
+      },
+      "Outcome": {
+        "additionalProperties": false,
+        "properties": {
+          "any_matched": {
+            "description": "Indexes of the ANY branches that passed",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/CondOutcome"
+            },
+            "type": "array"
+          },
+          "evaluable": {
+            "type": "boolean"
+          },
+          "pass": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pass",
+          "evaluable",
+          "conditions",
+          "any_matched"
+        ],
+        "type": "object"
+      },
       "ParamSpec": {
         "additionalProperties": false,
         "properties": {
@@ -318,6 +729,217 @@
         ],
         "type": "object"
       },
+      "Portfolio": {
+        "additionalProperties": false,
+        "properties": {
+          "capital": {
+            "description": "Starting capital in rupees",
+            "format": "double",
+            "type": "number"
+          },
+          "max_positions": {
+            "description": "Maximum concurrent positions",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capital",
+          "max_positions"
+        ],
+        "type": "object"
+      },
+      "PortfolioStats": {
+        "additionalProperties": false,
+        "properties": {
+          "bench_cagr": {
+            "description": "Buy-and-hold Nifty 50's CAGR, a fraction",
+            "format": "double",
+            "type": "number"
+          },
+          "bench_max_drawdown": {
+            "description": "Buy-and-hold Nifty 50's max drawdown, a fraction ≤ 0",
+            "format": "double",
+            "type": "number"
+          },
+          "cagr": {
+            "description": "Compound annual growth rate, a fraction (0.12 is 12%)",
+            "format": "double",
+            "type": "number"
+          },
+          "exposure": {
+            "description": "Fraction of trading days with a position held, 0–1",
+            "format": "double",
+            "type": "number"
+          },
+          "final_equity": {
+            "description": "Rupees at the last close",
+            "format": "double",
+            "type": "number"
+          },
+          "max_drawdown": {
+            "description": "Deepest fall from a peak, a fraction ≤ 0",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "cagr",
+          "max_drawdown",
+          "final_equity",
+          "exposure",
+          "bench_cagr",
+          "bench_max_drawdown"
+        ],
+        "type": "object"
+      },
+      "PortfolioTrade": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_date": {
+            "description": "Next trading day after the signal; filled at its open",
+            "format": "date",
+            "type": "string"
+          },
+          "entry_price": {
+            "description": "Fill after slippage, before costs",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "exit_price": {
+            "description": "Fill after slippage, before costs; the last close for an open trade",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_reason": {
+            "enum": [
+              "stop",
+              "trend",
+              "open"
+            ],
+            "type": "string"
+          },
+          "gapped_stop": {
+            "description": "The day opened below the stop, so it filled at the open",
+            "type": "boolean"
+          },
+          "holding_days": {
+            "description": "Trading days from entry to exit",
+            "format": "int64",
+            "type": "integer"
+          },
+          "quantity": {
+            "description": "Whole shares bought",
+            "format": "int64",
+            "type": "integer"
+          },
+          "return_pct": {
+            "description": "Per-share return in percent, net of costs and slippage",
+            "format": "double",
+            "type": "number"
+          },
+          "signal_date": {
+            "description": "Signal bar (weekly: the signal week's last trading day)",
+            "format": "date",
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity",
+          "symbol",
+          "signal_date",
+          "entry_date",
+          "exit_date",
+          "entry_price",
+          "exit_price",
+          "exit_reason",
+          "gapped_stop",
+          "return_pct",
+          "holding_days"
+        ],
+        "type": "object"
+      },
+      "QuickscanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "description": "Scan as of this date (default: the latest benchmark date)",
+            "format": "date",
+            "type": "string"
+          },
+          "mode": {
+            "default": "fresh",
+            "description": "fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now",
+            "enum": [
+              "fresh",
+              "all"
+            ],
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {},
+            "description": "Param values; missing ones take their defaults",
+            "type": "object"
+          },
+          "pattern": {
+            "description": "Pattern or filter type, from /api/patterns",
+            "type": "string"
+          },
+          "timeframe": {
+            "default": "daily",
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "type": "string"
+          },
+          "universe": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pattern",
+          "universe"
+        ],
+        "type": "object"
+      },
+      "RSEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bench_return": {
+            "format": "double",
+            "type": "number"
+          },
+          "diff": {
+            "format": "double",
+            "type": "number"
+          },
+          "stock_return": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "relative_strength"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "stock_return",
+          "bench_return",
+          "diff"
+        ],
+        "type": "object"
+      },
       "Report": {
         "additionalProperties": false,
         "properties": {
@@ -342,6 +964,10 @@
           },
           "symbol": {
             "type": "string"
+          },
+          "system_outcome": {
+            "$ref": "#/components/schemas/Outcome",
+            "description": "The system's entry rule on as_of (only with a system)"
           },
           "timeframe": {
             "enum": [
@@ -392,10 +1018,16 @@
             "format": "date",
             "type": "string"
           },
+          "system": {
+            "$ref": "#/components/schemas/System",
+            "description": "Report this system's conditions and outcome instead of every pattern; it need not be saved"
+          },
           "timeframe": {
             "default": "daily",
+            "description": "Bars to evaluate on; weekly bars are complete ISO weeks built from daily bars. Ignored with a system, which has its own",
             "enum": [
-              "daily"
+              "daily",
+              "weekly"
             ],
             "type": "string"
           }
@@ -421,6 +1053,357 @@
           "evidence"
         ],
         "type": "object"
+      },
+      "ScanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "description": "Scan as of this date (default: the latest benchmark date)",
+            "format": "date",
+            "type": "string"
+          },
+          "mode": {
+            "default": "fresh",
+            "description": "fresh: signalled within the last 5 daily / 1 weekly bars; all: qualifying now",
+            "enum": [
+              "fresh",
+              "all"
+            ],
+            "type": "string"
+          },
+          "system": {
+            "$ref": "#/components/schemas/System",
+            "description": "The system to scan; it need not be saved"
+          }
+        },
+        "required": [
+          "system"
+        ],
+        "type": "object"
+      },
+      "ScanResult": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "description": "Date scanned, from the data",
+            "type": "string"
+          },
+          "auto_inserted": {
+            "description": "Condition types added because the pattern needs them",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/Match"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Stocks with no bars up to as_of",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "stale": {
+            "description": "Stocks whose last bar is before as_of; never matched",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "matches",
+          "stale",
+          "skipped",
+          "auto_inserted"
+        ],
+        "type": "object"
+      },
+      "SkippedInstrument": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "enum": [
+              "no_data"
+            ],
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "SkippedSignal": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "price_above_slot",
+              "insufficient_cash"
+            ],
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "entry_date",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "System": {
+        "additionalProperties": false,
+        "properties": {
+          "costs": {
+            "$ref": "#/components/schemas/Costs"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/Entry"
+          },
+          "exits": {
+            "$ref": "#/components/schemas/Exits"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "portfolio": {
+            "$ref": "#/components/schemas/Portfolio"
+          },
+          "timeframe": {
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "type": "string"
+          },
+          "universe": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "universe",
+          "entry"
+        ],
+        "type": "object"
+      },
+      "SystemsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "systems": {
+            "items": {
+              "$ref": "#/components/schemas/System"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "systems"
+        ],
+        "type": "object"
+      },
+      "Trade": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_date": {
+            "description": "Next trading day after the signal; filled at its open",
+            "format": "date",
+            "type": "string"
+          },
+          "entry_price": {
+            "description": "Fill after slippage, before costs",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "exit_price": {
+            "description": "Fill after slippage, before costs; the last close for an open trade",
+            "format": "double",
+            "type": "number"
+          },
+          "exit_reason": {
+            "enum": [
+              "stop",
+              "trend",
+              "open"
+            ],
+            "type": "string"
+          },
+          "gapped_stop": {
+            "description": "The day opened below the stop, so it filled at the open",
+            "type": "boolean"
+          },
+          "holding_days": {
+            "description": "Trading days from entry to exit",
+            "format": "int64",
+            "type": "integer"
+          },
+          "return_pct": {
+            "description": "Per-share return in percent, net of costs and slippage",
+            "format": "double",
+            "type": "number"
+          },
+          "signal_date": {
+            "description": "Signal bar (weekly: the signal week's last trading day)",
+            "format": "date",
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "signal_date",
+          "entry_date",
+          "exit_date",
+          "entry_price",
+          "exit_price",
+          "exit_reason",
+          "gapped_stop",
+          "return_pct",
+          "holding_days"
+        ],
+        "type": "object"
+      },
+      "TradeStats": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_loss_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "avg_win_pct": {
+            "format": "double",
+            "type": "number"
+          },
+          "expectancy_pct": {
+            "description": "Mean return per trade, in percent",
+            "format": "double",
+            "type": "number"
+          },
+          "median_holding_days": {
+            "description": "In trading days",
+            "format": "int64",
+            "type": "integer"
+          },
+          "trades": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "win_rate": {
+            "description": "Fraction of trades with a positive return, 0–1",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "trades",
+          "win_rate",
+          "avg_win_pct",
+          "avg_loss_pct",
+          "expectancy_pct",
+          "median_holding_days"
+        ],
+        "type": "object"
+      },
+      "Universe": {
+        "additionalProperties": false,
+        "properties": {
+          "has_history": {
+            "description": "False when only today's members are known (survivorship bias)",
+            "type": "boolean"
+          },
+          "members": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "members",
+          "has_history"
+        ],
+        "type": "object"
+      },
+      "UniversesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "universes": {
+            "items": {
+              "$ref": "#/components/schemas/Universe"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "universes"
+        ],
+        "type": "object"
+      },
+      "ValidateOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "system": {
+            "$ref": "#/components/schemas/System"
+          }
+        },
+        "required": [
+          "system"
+        ],
+        "type": "object"
+      },
+      "VolumeEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_volume": {
+            "format": "double",
+            "type": "number"
+          },
+          "ratio": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "volume_surge"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ratio",
+          "avg_volume"
+        ],
+        "type": "object"
       }
     }
   },
@@ -431,6 +1414,74 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/backtest": {
+      "post": {
+        "operationId": "backtest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Backtest a system over its stock list"
+      }
+    },
     "/api/bars/{symbol}": {
       "get": {
         "operationId": "get-bars",
@@ -521,6 +1572,34 @@
         "summary": "Daily bars for one chart"
       }
     },
+    "/api/default-system": {
+      "get": {
+        "operationId": "get-default-system",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultSystemOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The system the Builder opens on"
+      }
+    },
     "/api/patterns": {
       "get": {
         "operationId": "list-patterns",
@@ -547,6 +1626,74 @@
           }
         },
         "summary": "List every registered pattern and its params"
+      }
+    },
+    "/api/quickscan": {
+      "post": {
+        "operationId": "quick-scan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickscanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Scan a stock list for one pattern or filter"
       }
     },
     "/api/report/{symbol}": {
@@ -626,6 +1773,433 @@
           }
         },
         "summary": "Evaluate every pattern on one stock"
+      }
+    },
+    "/api/scan": {
+      "post": {
+        "operationId": "scan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Scan a system's stock list"
+      }
+    },
+    "/api/systems": {
+      "get": {
+        "operationId": "list-systems",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List saved systems"
+      },
+      "post": {
+        "operationId": "create-system",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Save a new system"
+      }
+    },
+    "/api/systems/{id}": {
+      "delete": {
+        "operationId": "delete-system",
+        "parameters": [
+          {
+            "description": "Saved system id (a UUID)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Saved system id (a UUID)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Delete a saved system"
+      },
+      "get": {
+        "operationId": "get-system",
+        "parameters": [
+          {
+            "description": "Saved system id (a UUID)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Saved system id (a UUID)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get a saved system"
+      },
+      "put": {
+        "operationId": "update-system",
+        "parameters": [
+          {
+            "description": "Saved system id (a UUID)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Saved system id (a UUID)",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Replace a saved system"
+      }
+    },
+    "/api/universes": {
+      "get": {
+        "operationId": "list-universes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniversesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List every stock list"
+      }
+    },
+    "/api/validate": {
+      "post": {
+        "operationId": "validate-system",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Validate a system and return it with defaults filled in"
       }
     }
   }

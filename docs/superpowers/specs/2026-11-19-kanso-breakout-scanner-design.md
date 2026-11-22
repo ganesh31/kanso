@@ -149,7 +149,7 @@ Portfolio: CAGR, max drawdown, final equity, exposure (% of time invested), vs. 
 - **Variations tested:** count of **distinct parameter sets** backtested for this system (re-running identical parameters doesn't count), with a one-line warning about overfitting when > 10. *(design call)* It is tracked client-side per system draft, saved or not, so it works on the stateless demo (§6.4).
 - **Actual data window:** the real first date used. Relative strength and the benchmark can't be evaluated before the benchmark's history starts (§6.1).
 - **Ranking rule:** "crowded days ranked by 6-month RS, then symbol".
-- **Skipped signals:** count and reasons, e.g. "1 signal skipped: price above slot size".
+- **Skipped signals:** count and reasons, e.g. "1 signal skipped: price above slot size" (one share costs more than equity ÷ max positions) or "1 signal skipped: insufficient cash" (one share fits the slot, but the cash left can't buy it).
 
 ## 6. Data
 

@@ -19,6 +19,9 @@ type Series struct {
 	Complete int
 	// LastDailyIdx[i] is the index of bar i's last daily bar; nil for daily.
 	LastDailyIdx []int
+	// gapPrefix[i] is the number of data gaps recorded at bars 0..i-1;
+	// nil until MarkGaps runs.
+	gapPrefix []int
 }
 
 // NewDaily wraps daily bars (sorted ascending by date) in a Series.

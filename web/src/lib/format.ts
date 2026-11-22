@@ -10,6 +10,18 @@ export function formatPctVs(pct: number, above = "above", below = "below"): stri
   return `${Math.abs(pct).toFixed(2)}% ${pct >= 0 ? above : below}`;
 }
 
+/** "+20.00%" / "−5.00%" (a true minus sign). */
+export function formatSignedPct(pct: number): string {
+  return `${pct < 0 ? "−" : "+"}${Math.abs(pct).toFixed(2)}%`;
+}
+
+const volume = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+
+/** Share volumes, whole shares, Indian digit grouping: "1,23,457". */
+export function formatVolume(n: number): string {
+  return volume.format(n);
+}
+
 function parseDate(d: string): { y: number; m: number; day: number } {
   const [y = 0, m = 0, day = 0] = d.split("-").map(Number);
   return { y, m, day };
@@ -33,6 +45,15 @@ export function formatAge(from: string, to: string): string {
   const rest = months % 12;
   const parts = [years > 0 ? plural(years, "year") : "", rest > 0 ? plural(rest, "month") : ""];
   return `${parts.filter(Boolean).join(" ")} ago`;
+}
+
+/** "1y 10m", "3m", "<1m": a level's age for table cells. */
+export function formatAgeShort(from: string, to: string): string {
+  const months = monthsBetween(from, to);
+  if (months === 0) return "<1m";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return [years > 0 ? `${years}y` : "", rest > 0 ? `${rest}m` : ""].filter(Boolean).join(" ");
 }
 
 /** "insufficient_history" → "insufficient history". */

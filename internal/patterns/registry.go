@@ -33,7 +33,7 @@ func (r *Registry) All() []Meta {
 	return out
 }
 
-// Default returns a registry of every V1 pattern implemented so far.
+// Default returns a registry of every V1 pattern and filter.
 func Default() *Registry {
-	return NewRegistry(NYearHigh{})
+	return NewRegistry(NYearHigh{}, VolumeSurge{}, RelativeStrength{}, NotExtended{}, LevelAge{})
 }

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { configureApi, type Report } from "@/api/client";
+import { configureApi, type Report, type Timeframe } from "@/api/client";
 import { StockReport } from "./StockReport";
 
 /** A fake server behind the generated client: the report endpoint answers with `report()`. */
@@ -63,11 +63,16 @@ const tooNew: Report = {
   ],
 };
 
-function renderReport(symbol: string, asOf?: string) {
+function renderReport(
+  symbol: string,
+  asOf?: string,
+  timeframe?: Timeframe,
+  onTimeframeChange: (tf: Timeframe) => void = () => {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <StockReport symbol={symbol} asOf={asOf} />
+      <StockReport symbol={symbol} asOf={asOf} timeframe={timeframe} onTimeframeChange={onTimeframeChange} />
     </QueryClientProvider>,
   );
 }
@@ -99,10 +104,10 @@ describe("StockReport", () => {
 
   afterEach(() => configureApi({}));
 
-  test("StockReport renders ✅/❌ lines and 'insufficient history'", async () => {
+  test("StockReport renders pass/can't-tell lines and 'insufficient history'", async () => {
     report.mockReturnValueOnce({ status: 200, body: breakout });
     const { unmount } = renderReport("DIVISLAB");
-    expect(await screen.findByText("✅")).toBeInTheDocument();
+    expect(await screen.findByText("Pass")).toBeInTheDocument();
     expect(
       screen.getByText(/Old high 4,105.20 set 2021-10-25, 2 years 10 months ago \(717 bars\)/),
     ).toBeInTheDocument();
@@ -110,16 +115,21 @@ describe("StockReport", () => {
 
     report.mockReturnValueOnce({ status: 200, body: tooNew });
     renderReport("NEWCO");
-    expect(await screen.findByText("❌")).toBeInTheDocument();
+    expect(await screen.findByText("Can't tell")).toBeInTheDocument();
     expect(screen.getByText("not evaluable (insufficient history)")).toBeInTheDocument();
+    expect(screen.getByText("Can't tell yet: insufficient history.")).toBeInTheDocument();
   });
 
-  test("StockReport shows level line value in header", async () => {
+  test("StockReport leads with the breakout verdict and the level", async () => {
     report.mockReturnValueOnce({ status: 200, body: breakout });
     renderReport("DIVISLAB", "2024-09-10");
     expect(await screen.findByRole("heading", { name: "DIVISLAB" })).toBeInTheDocument();
     expect(screen.getByText("as of 2024-09-10")).toBeInTheDocument();
-    expect(screen.getByText(/Breakout level 4,105.20 \(set 2021-10-25\)/)).toBeInTheDocument();
+    const verdict = screen.getByTestId("verdict");
+    expect(verdict).toHaveTextContent(
+      "Breaking out: closed at ₹4,300.00, 4.75% above its 3-year high of ₹4,105.20 (set 2021-10-25).",
+    );
+    expect(screen.getByText("1 of 1 conditions pass")).toBeInTheDocument();
     expect(report).toHaveBeenCalledWith("DIVISLAB", { as_of: "2024-09-10" });
     const chart = await screen.findByTestId("chart");
     expect(chart).toHaveAttribute("data-level", "4105.2");
@@ -132,6 +142,25 @@ describe("StockReport", () => {
     renderReport("DIVISLAB", "2001-01-01");
     expect(await screen.findByText("no data on or before that date")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("chart")).toHaveAttribute("data-bars", "0"));
+  });
+
+  test("weekly timeframe asks for weekly bars and says so", async () => {
+    report.mockReturnValueOnce({ status: 200, body: { ...breakout, timeframe: "weekly" } });
+    renderReport("DIVISLAB", "2024-09-10", "weekly");
+    expect(await screen.findByText(/evaluated on the weekly bar/)).toBeInTheDocument();
+    expect(report).toHaveBeenCalledWith("DIVISLAB", { as_of: "2024-09-10", timeframe: "weekly" });
+    expect(screen.getByRole("button", { name: "Weekly" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Daily" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("timeframe toggle reports the chosen timeframe", async () => {
+    report.mockReturnValueOnce({ status: 200, body: breakout });
+    const onChange = vi.fn();
+    renderReport("DIVISLAB", undefined, undefined, onChange);
+    await screen.findByText("Pass");
+    expect(report).toHaveBeenCalledWith("DIVISLAB", {});
+    fireEvent.click(screen.getByRole("button", { name: "Weekly" }));
+    expect(onChange).toHaveBeenCalledWith("weekly");
   });
 
   test("unknown symbol shows the API error", async () => {

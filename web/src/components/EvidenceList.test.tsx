@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vite-plus/test";
-import type { Evidence, EvidenceType, ReportLine } from "@/api/client";
-import { EvidenceList, describeEvidence } from "./EvidenceList";
+import type { Evidence, EvidenceType, NotEvaluableReason, ReportLine } from "@/api/client";
+import { EvidenceList, describeEvidence, describeRule } from "./EvidenceList";
 
 // One fixture per union member. Typed as a Record over the discriminator,
 // so adding a variant to the API breaks this file until it gets a fixture.
@@ -14,6 +14,10 @@ const fixtures: { [K in EvidenceType]: Extract<Evidence, { type: K }> } = {
     close: 1266.1,
     pct_above: 2.1048387096774,
   },
+  level_age: { type: "level_age", level_date: "2023-01-12", bars_since: 470 },
+  not_extended: { type: "not_extended", pct_above: 2.1048387096774 },
+  relative_strength: { type: "relative_strength", stock_return: 0.2, bench_return: 0.1, diff: 0.1 },
+  volume_surge: { type: "volume_surge", ratio: 2.345, avg_volume: 123456.7 },
   not_evaluable: { type: "not_evaluable", reason: "insufficient_history" },
 };
 
@@ -30,10 +34,32 @@ describe("EvidenceList", () => {
   test("EvidenceList handles every evidence type", () => {
     const expected: Record<EvidenceType, string> = {
       n_year_high: "Old high 1,240.00 set 2023-01-12, 1 year 10 months ago (372 bars); close 1,266.10, 2.10% above",
+      level_age: "Old high set 2023-01-12, 1 year 10 months ago (470 bars)",
+      not_extended: "Close 2.10% above the breakout level",
+      relative_strength: "Stock +20.00% vs benchmark +10.00%: 10.00 points ahead",
+      volume_surge: "Volume 2.35× the average of 1,23,457",
       not_evaluable: "not evaluable (insufficient history)",
     };
     for (const [type, ev] of Object.entries(fixtures) as [EvidenceType, Evidence][]) {
       expect(describeEvidence(ev, "2024-11-20")).toBe(expected[type]);
+    }
+  });
+
+  test("lagging the benchmark and a falling market read in plain English", () => {
+    const ev: Evidence = { type: "relative_strength", stock_return: -0.05, bench_return: -0.12, diff: 0.07 };
+    expect(describeEvidence(ev, "2024-11-20")).toBe("Stock −5.00% vs benchmark −12.00%: 7.00 points ahead");
+    const lag: Evidence = { type: "relative_strength", stock_return: 0.03, bench_return: 0.1, diff: -0.07 };
+    expect(describeEvidence(lag, "2024-11-20")).toBe("Stock +3.00% vs benchmark +10.00%: 7.00 points behind");
+  });
+
+  test("the filters' not-evaluable reasons are described", () => {
+    const expected: Partial<Record<NotEvaluableReason, string>> = {
+      benchmark_missing: "not evaluable (benchmark missing)",
+      no_breakout_level: "not evaluable (no breakout level)",
+      zero_denominator: "not evaluable (zero denominator)",
+    };
+    for (const [reason, text] of Object.entries(expected) as [NotEvaluableReason, string][]) {
+      expect(describeEvidence({ type: "not_evaluable", reason }, "2024-11-20")).toBe(text);
     }
   });
 
@@ -53,10 +79,50 @@ describe("EvidenceList", () => {
     );
     const items = screen.getAllByRole("listitem");
     expect(items).toHaveLength(2);
-    expect(items[0]).toHaveTextContent("✅");
+    expect(items[0]).toHaveTextContent("Pass");
     expect(items[0]).toHaveTextContent("New N-year high");
     expect(items[0]).toHaveTextContent("Old high 1,240.00 set 2023-01-12");
-    expect(items[1]).toHaveTextContent("❌");
+    expect(items[1]).toHaveTextContent("Can't tell");
     expect(items[1]).toHaveTextContent("not evaluable (insufficient history)");
+  });
+
+  test("each line states the rule it tests, from its params", () => {
+    expect(describeRule("n_year_high", { years: 3, all_time: false })).toBe(
+      "Close above the highest high of the prior 3 years",
+    );
+    expect(describeRule("n_year_high", { years: 3, all_time: true })).toBe("Close above the all-time high");
+    expect(describeRule("level_age", { min_age_years: 1 })).toBe("Needs an old high set at least 1 year ago");
+    expect(describeRule("not_extended", { pct: 8 })).toBe("Needs the close at most 8% above the breakout level");
+    expect(describeRule("relative_strength", { benchmark: "^NSEI", rs_months: 6 })).toBe(
+      "Needs a better 6-month return than Nifty 50",
+    );
+    expect(describeRule("volume_surge", { k: 2, window_weeks: 10 })).toBe(
+      "Needs volume at least 2× the 10-week average",
+    );
+    expect(describeRule("something_new", {})).toBeUndefined();
+  });
+
+  test("a failing line shows the rule beside its evidence", () => {
+    render(
+      <EvidenceList
+        asOf="2024-11-20"
+        lines={[
+          {
+            type: "level_age",
+            label: "Old high age",
+            params: { min_age_years: 1 },
+            result: {
+              pass: false,
+              evaluable: true,
+              evidence: { type: "level_age", level_date: "2024-05-01", bars_since: 140 },
+            },
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole("listitem");
+    expect(item).toHaveTextContent("Fail");
+    expect(item).toHaveTextContent("Needs an old high set at least 1 year ago");
+    expect(item).toHaveTextContent("Old high set 2024-05-01");
   });
 });

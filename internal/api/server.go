@@ -44,11 +44,11 @@ func init() {
 }
 
 // New returns the HTTP handler serving the API, /openapi.json, /docs and
-// the web app.
-func New(prov market.Provider, cfg Config) http.Handler {
+// the web app. Saved systems live in systems.
+func New(prov market.Provider, systems SystemStore, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	api := newAPI(mux)
-	register(api, &handlers{prov: prov})
+	register(api, &handlers{prov: prov, systems: systems})
 	mux.Handle("/", spa(cfg.Static))
 	if cfg.Logger == nil {
 		return mux

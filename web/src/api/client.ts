@@ -5,7 +5,8 @@
 export * from "./generated";
 export { ApiError, configureApi, type ApiConfig, type FieldError } from "./fetcher";
 
-import type { Evidence, Meta } from "./generated";
+import type { Evidence, Meta, ReportRequestTimeframe } from "./generated";
 
 export type EvidenceType = Evidence["type"];
+export type Timeframe = ReportRequestTimeframe;
 export type PatternMeta = Meta;
