@@ -90,7 +90,8 @@ export function ParamEditor({
 
 /**
  * A number field that can be cleared while typing a replacement: it keeps its own text and
- * reports only valid numbers. Leaving it empty restores the last valid value.
+ * reports only valid numbers. Leaving it empty restores the last valid value; while it is empty
+ * it is `required`-invalid, so its form won't submit.
  */
 function NumberInput({
   id,
@@ -115,6 +116,7 @@ function NumberInput({
     <Input
       id={id}
       type="number"
+      required
       min={spec.min}
       max={spec.max}
       step={spec.step > 0 ? spec.step : "any"}

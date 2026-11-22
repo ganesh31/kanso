@@ -185,6 +185,17 @@ describe("QuickScan", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  test("Enter on an emptied param does not scan its last value", async () => {
+    renderQuickScan();
+    await screen.findByRole("option", { name: "NIFTY50" });
+    const years = screen.getByLabelText(/Years/);
+    fireEvent.change(years, { target: { value: "" } });
+    fireEvent.submit(years.closest("form")!);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(quickscan).not.toHaveBeenCalled();
+    expect(years).toBeInvalid();
+  });
+
   test("a cleared param left empty shows its value again", async () => {
     renderQuickScan();
     await screen.findByRole("option", { name: "NIFTY50" });

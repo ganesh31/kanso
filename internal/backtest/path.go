@@ -30,8 +30,8 @@ type Trade struct {
 	EntryPrice float64
 	ExitPrice  float64
 	ExitReason ExitReason
-	// GappedStop is true when the day opened below the stop, so the stop
-	// filled at the open.
+	// GappedStop is true when the day opened at or below the stop, so the
+	// stop filled at the open.
 	GappedStop bool
 	// ReturnPct is the per-share return in percent, net of costs and
 	// slippage on both sides (no exit cost on an open trade).
@@ -54,7 +54,7 @@ type Trade struct {
 //     week, the bar that proves the signal week complete), plus slippage.
 //   - Stop: stop_pct below the entry fill, checked from the entry day on.
 //     On a day whose low reaches it, the exit reference is min(open, stop)
-//     and GappedStop is set when the open was below the stop.
+//     and GappedStop is set when the open was at or below the stop.
 //   - Trend exit: when a complete week ending on or after the entry day
 //     closes below its trend_sma_weeks SMA of weekly closes, exit at the
 //     next trading day's open. It comes before that day's stop check.
@@ -84,7 +84,7 @@ func TradePath(sig int, ctx *patterns.Context, daily *market.Series, sys *rules.
 			return exit(tr, d, b, b.Open, ExitTrend, e, ex, cm), true
 		}
 		if sys.Exits.StopPct > 0 && b.Low <= stop {
-			tr.GappedStop = b.Open < stop
+			tr.GappedStop = b.Open <= stop
 			return exit(tr, d, b, min(b.Open, stop), ExitStop, e, ex, cm), true
 		}
 	}

@@ -168,6 +168,9 @@ export function QuickScan({
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
+              // An emptied or out-of-range param makes the form invalid: point at it rather than
+              // scanning the param's last valid value.
+              if (!e.currentTarget.reportValidity()) return;
               if (meta && universe) submit();
             }}
           >
