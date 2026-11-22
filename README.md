@@ -1,5 +1,7 @@
 # Kanso
 
+[![CI](https://github.com/ganesh31/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/ganesh31/kanso/actions/workflows/ci.yml)
+
 Kanso is a breakout scanner and backtester for NSE stocks. It finds stocks closing above a multi-year high, shows the evidence behind every verdict, and tests a rule over history with the fill and survivorship decisions spelled out next to the results.
 
 It is a technical-analysis tool only. It reads end-of-day prices and tells you what a rule would have done. It does not trade.
@@ -85,8 +87,6 @@ To regenerate the golden files after a deliberate change:
 ```sh
 KANSO_DB=kanso.db make benchmark   # needs uv; review the diff like any other change
 ```
-
-_Status: the benchmark lands with issue #14; until then `make benchmark` prints "not implemented yet"._
 
 ## Data
 
@@ -174,7 +174,13 @@ Example launchd jobs for both runs are in [`deploy/launchd/`](deploy/launchd/); 
 make test        # Go tests: no network, Python or database needed
 make test-web    # web unit tests (Vitest)
 make check-api   # the committed OpenAPI spec and TypeScript client are fresh
+make lint        # golangci-lint, gofumpt and vp check
+make e2e         # Playwright interviewer flow (needs `pnpm exec playwright install chromium` once)
 ```
+
+**End to end.** `make e2e` builds the server, imports the benchmark fixture (`testdata/benchmark/bars.parquet`) into a temp database with `go run ./cmd/export-fixture -import`, starts the server in demo mode on port 8099 (`KANSO_E2E_PORT` to change it), and runs the interviewer flow: open the System Builder, backtest the default system, check the CAGR and drawdown tiles against Nifty and the honesty panel, then chart the first trade. No network or ingested database is needed.
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs four jobs in parallel on every PR and push to main: `go` (race tests, golangci-lint, gofumpt, `sqlc diff`), `api` (`make check-api`), `web` (frozen install, `tsc -b`, `vp check`, `vp test`) and `e2e` (`make e2e`, with the Playwright report uploaded on failure). CodeRabbit reviews PRs using [`.coderabbit.yaml`](.coderabbit.yaml).
 
 The Go tests include golden tests per pattern, a no-look-ahead property test (signals on data cut at t match signals on the full data up to t), fill tests, and resampling tests across holidays and short weeks.
 
