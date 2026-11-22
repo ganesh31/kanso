@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BacktestPanel } from "@/components/BacktestPanel";
+import { builderSearchSchema } from "@/lib/builderSearch";
 
 export const Route = createFileRoute("/builder")({
+  validateSearch: builderSearchSchema,
   component: BuilderPage,
 });
 

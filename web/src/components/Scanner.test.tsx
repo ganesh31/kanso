@@ -30,7 +30,7 @@ function Harness({ initial }: { initial: ScannerSearch }) {
   const [search, setSearch] = useState<ScannerSearch>(initial);
   return (
     <>
-      <Scanner search={search} onSearchChange={setSearch} onOpenReport={() => {}} />
+      <Scanner search={search} onSearchChange={setSearch} onOpenReport={() => {}} onOpenBuilder={() => {}} />
       <output data-testid="search">{JSON.stringify(search)}</output>
     </>
   );
