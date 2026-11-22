@@ -117,7 +117,7 @@ func registerSystems(api huma.API, h *handlers) {
 		Path:          "/api/systems",
 		Summary:       "Save a new system",
 		DefaultStatus: http.StatusCreated,
-		Errors:        []int{http.StatusBadRequest},
+		Errors:        []int{http.StatusBadRequest, http.StatusForbidden},
 	}, h.createSystem)
 	huma.Register(api, huma.Operation{
 		OperationID: "get-system",
@@ -131,7 +131,7 @@ func registerSystems(api huma.API, h *handlers) {
 		Method:      http.MethodPut,
 		Path:        "/api/systems/{id}",
 		Summary:     "Replace a saved system",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound},
 	}, h.updateSystem)
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-system",
@@ -139,14 +139,14 @@ func registerSystems(api huma.API, h *handlers) {
 		Path:          "/api/systems/{id}",
 		Summary:       "Delete a saved system",
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound},
+		Errors:        []int{http.StatusForbidden, http.StatusNotFound},
 	}, h.deleteSystem)
 	huma.Register(api, huma.Operation{
 		OperationID: "scan",
 		Method:      http.MethodPost,
 		Path:        "/api/scan",
 		Summary:     "Scan a system's stock list",
-		Errors:      []int{http.StatusBadRequest, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusNotFound, http.StatusTooManyRequests},
 	}, h.scan)
 }
 
