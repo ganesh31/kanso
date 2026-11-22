@@ -4,7 +4,7 @@ Kanso is a breakout scanner and backtester for NSE stocks. It finds stocks closi
 
 It is a technical-analysis tool only. It reads end-of-day prices and tells you what a rule would have done. It does not trade.
 
-**Live demo:** _coming soon_ (the public deploy is deferred; run it locally for now, see [Local setup](#local-setup)).
+**Live demo:** _coming soon_ (the public deploy is deferred; run it locally for now, see [Local setup](#local-setup), or run the demo container, see [Demo mode](#demo-mode)).
 
 ## What it does
 
@@ -103,14 +103,54 @@ You need Go 1.27, Node 26 and pnpm.
 #    The constituents CSV comes from niftyindices.com (for example ind_nifty50list.csv).
 go run ./cmd/ingest -db kanso.db -universe NIFTY50 -constituents ind_nifty50list.csv
 
-# 2. Build the web app, then serve the API and the app on http://127.0.0.1:8080.
-make web
+# 2. Build the web app and embed it in the server binary (bin/server, bin/ingest),
+#    then serve the API and the app on http://127.0.0.1:8080.
 make run DB=kanso.db
 ```
 
-The server listens on localhost only by default, because saved systems are writable without authentication. Use `-addr` to pick another address.
+The server listens on localhost only by default, because saved systems are writable without authentication. Use `-addr` to pick another address. `make build` copies `web/dist` into `internal/webui/dist`, which the binary embeds; `-web web/dist` serves a directory instead.
 
 For web development, run the server as above and `cd web && pnpm install && pnpm dev`; Vite proxies `/api` and `/docs` to port 8080.
+
+## Demo mode
+
+The public demo is the same binary started with `-demo`:
+
+- The database opens read-only. `POST`, `PUT` and `DELETE /api/systems` return 403, so the server stores nothing.
+- The web app notices the first 403 and from then on keeps the visitor's saved systems in the browser's localStorage (or in memory, if storage is blocked). The variation count is already kept there.
+- Backtest, scan, Quick Scan, Stock Report and bars share a per-IP limit of 60 requests a minute (`-rate-limit`). The client IP is the first `X-Forwarded-For` hop, else the connection's address. Over the limit, the answer is a 429 problem with `Retry-After`.
+- `/api/bars` serves at most 5,000 bars per request, so the data can't be bulk-downloaded.
+- Every request is logged as one JSON line (method, path, status, IP, duration).
+
+To build and run the demo container locally:
+
+```sh
+make demo-snapshot              # Nifty 50 (deploy/nifty50.csv) plus ^NSEI from Yahoo into deploy/demo.db
+docker build -t kanso .
+docker run --rm -p 8080:8080 kanso
+```
+
+`make demo-snapshot` vacuums the database into one rollback-journal file, which opens read-only without the `-shm` file that WAL needs. The Dockerfile has three stages: Node 26 and pnpm build the web app, Go builds a static binary (`CGO_ENABLED=0`) with the app embedded, and a distroless static image runs it as a non-root user with `-demo -addr :${PORT}` (the server expands `${PORT}` itself, since the image has no shell).
+
+### Deploying
+
+The image runs on any container host that sets `PORT`. For Cloud Run (spec §6.4), keep **one instance**, so the in-memory rate limit holds:
+
+```sh
+# Once: an Artifact Registry repository in your project.
+gcloud artifacts repositories create kanso --repository-format docker --location asia-south1
+gcloud auth configure-docker asia-south1-docker.pkg.dev
+
+# Each deploy: build locally (deploy/demo.db is gitignored, so a source build wouldn't see it).
+IMAGE=asia-south1-docker.pkg.dev/$PROJECT_ID/kanso/kanso
+make demo-snapshot
+docker build --platform linux/amd64 -t $IMAGE .
+docker push $IMAGE
+gcloud run deploy kanso --image $IMAGE --region asia-south1 \
+  --max-instances 1 --memory 512Mi --allow-unauthenticated
+```
+
+The CI deploy (Workload Identity Federation, Artifact Registry) is deferred until the public demo is wanted.
 
 ## Nightly ingest
 
