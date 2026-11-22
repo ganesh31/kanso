@@ -71,6 +71,19 @@ func (q *Queries) DeleteBars(ctx context.Context, instrumentID int64) error {
 	return err
 }
 
+const earliestBarDate = `-- name: EarliestBarDate :one
+SELECT CAST(COALESCE(MIN(date), '') AS TEXT) AS earliest
+FROM bars_daily
+WHERE instrument_id = ?
+`
+
+func (q *Queries) EarliestBarDate(ctx context.Context, instrumentID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, earliestBarDate, instrumentID)
+	var earliest string
+	err := row.Scan(&earliest)
+	return earliest, err
+}
+
 const insertBar = `-- name: InsertBar :exec
 INSERT INTO bars_daily (instrument_id, date, open, high, low, close, volume)
 VALUES (?, ?, ?, ?, ?, ?, ?)

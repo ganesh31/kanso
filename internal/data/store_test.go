@@ -285,6 +285,21 @@ func TestLatestBarDate(t *testing.T) {
 	}
 }
 
+func TestEarliestBarDate(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	id := addInstrument(t, s, "TCS")
+	if d, err := s.EarliestBarDate(ctx, id); err != nil || d != "" {
+		t.Fatalf("no bars: %q, %v", d, err)
+	}
+	if err := s.UpsertBars(ctx, id, bars(4, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := s.EarliestBarDate(ctx, id); err != nil || d != "2024-01-01" {
+		t.Fatalf("got %q, %v; want 2024-01-01", d, err)
+	}
+}
+
 func TestSaveSplitsAndLogIngest(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openTemp(t)
@@ -348,6 +363,33 @@ func TestUpsertDailyIsAtomic(t *testing.T) {
 	}
 	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); len(got) != 3 {
 		t.Fatalf("bars = %d, want 3", len(got))
+	}
+	if sp, _ := s.Splits(ctx, id); !cmp.Equal(good, sp) {
+		t.Fatalf("Splits = %+v", sp)
+	}
+}
+
+func TestReplaceDailyIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	id := addInstrument(t, s, "TCS")
+	old := bars(5, 200)
+	if err := s.UpsertBars(ctx, id, old); err != nil {
+		t.Fatal(err)
+	}
+	bad := []Split{{Date: "2024-01-02", Numerator: math.NaN(), Denominator: 1}}
+	if err := s.ReplaceDaily(ctx, id, bars(3, 100), bad); err == nil {
+		t.Fatal("ReplaceDaily with an invalid split: want error")
+	}
+	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); !cmp.Equal(old, got) {
+		t.Fatalf("old bars changed after a failed ReplaceDaily: %+v", got)
+	}
+	good := []Split{{Date: "2024-01-02", Numerator: 2, Denominator: 1}}
+	if err := s.ReplaceDaily(ctx, id, bars(3, 100), good); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); !cmp.Equal(bars(3, 100), got) {
+		t.Fatalf("after replace: %+v", got)
 	}
 	if sp, _ := s.Splits(ctx, id); !cmp.Equal(good, sp) {
 		t.Fatalf("Splits = %+v", sp)
