@@ -49,6 +49,9 @@ func (VolumeSurge) Eval(ctx *Context, p Params, t int) Result {
 	if w < 1 || t < w {
 		return NotEvaluableResult(ReasonInsufficientHistory)
 	}
+	if s.GapsIn(t-w, t) > 0 {
+		return NotEvaluableResult(ReasonDataGap)
+	}
 	if ctx.volPos[t]-ctx.volPos[t-w] == 0 {
 		return NotEvaluableResult(ReasonZeroDenominator)
 	}

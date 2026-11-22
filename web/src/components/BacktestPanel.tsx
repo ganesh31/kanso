@@ -120,7 +120,9 @@ const SKIPPED_SHOWN = 5;
 function skippedSignalLines(h: Honesty): string[] {
   const byReason = new Map<string, string[]>();
   for (const s of h.skipped_signals) {
-    byReason.set(s.reason, [...(byReason.get(s.reason) ?? []), `${s.symbol} ${s.entry_date}`]);
+    const list = byReason.get(s.reason);
+    if (list) list.push(`${s.symbol} ${s.entry_date}`);
+    else byReason.set(s.reason, [`${s.symbol} ${s.entry_date}`]);
   }
   return [...byReason].map(([reason, list]) => {
     const shown = list.slice(0, SKIPPED_SHOWN).join(", ");

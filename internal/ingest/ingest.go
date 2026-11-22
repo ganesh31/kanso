@@ -118,10 +118,7 @@ func fetchOne(ctx context.Context, st *data.Store, src data.Source, in market.In
 	if len(bars) == 0 {
 		return 0, errors.New("no bars returned")
 	}
-	if err := st.UpsertBars(ctx, in.ID, bars); err != nil {
-		return 0, fmt.Errorf("%w: %w", errStore, err)
-	}
-	if err := st.SaveSplits(ctx, in.ID, splits); err != nil {
+	if err := st.UpsertDaily(ctx, in.ID, bars, splits); err != nil {
 		return 0, fmt.Errorf("%w: %w", errStore, err)
 	}
 	return len(bars), nil

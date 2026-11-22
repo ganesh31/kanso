@@ -1,4 +1,4 @@
-import { useScan } from "@/api/client";
+import { type Timeframe, useScan } from "@/api/client";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ScannerSearch } from "@/lib/scannerSearch";
 import { useSystems } from "@/state/systems";
@@ -16,7 +16,8 @@ export function SavedScan({
 }: {
   search: ScannerSearch;
   onSearchChange: (next: ScannerSearch) => void;
-  onOpenReport: (symbol: string) => void;
+  /** Opens a match's Stock Report on the timeframe it was scanned on. */
+  onOpenReport: (symbol: string, tf: Timeframe) => void;
 }) {
   const { systems, isLoading, error } = useSystems();
   const system = systems.find((s) => s.id === search.system);
@@ -82,7 +83,7 @@ export function SavedScan({
           result={scan.data}
           sort={search.sort}
           onSortChange={(sort) => onSearchChange({ ...search, sort })}
-          onOpen={onOpenReport}
+          onOpen={(symbol) => onOpenReport(symbol, system.timeframe ?? "daily")}
         />
       )}
     </div>

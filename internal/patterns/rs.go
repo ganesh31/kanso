@@ -47,7 +47,8 @@ func RSDiff(ctx *Context, months float64, t int) (diff float64, ok bool) {
 }
 
 // rs computes the evidence, or the reason it can't. Both ends of the
-// window need a benchmark bar on the same date as the stock's bar.
+// window need a complete benchmark bar on the same date (or ISO week) as
+// the stock's bar, and the stock's window must have no data gap.
 func rs(ctx *Context, months float64, t int) (RSEvidence, Reason) {
 	s := ctx.Series
 	if t < 0 || t >= s.Complete {
@@ -57,7 +58,12 @@ func rs(ctx *Context, months float64, t int) (RSEvidence, Reason) {
 	if n < 1 || t < n {
 		return RSEvidence{}, ReasonInsufficientHistory
 	}
-	if ctx.Bench == nil || ctx.BenchIdx[t] < 0 || ctx.BenchIdx[t-n] < 0 {
+	if s.GapsIn(t-n, t) > 0 {
+		return RSEvidence{}, ReasonDataGap
+	}
+	// A provisional benchmark week can share an ISO week with a complete
+	// stock week that ends later: its close isn't the week's close yet.
+	if ctx.Bench == nil || ctx.BenchIdx[t] < 0 || ctx.BenchIdx[t-n] < 0 || ctx.BenchIdx[t] >= ctx.Bench.Complete {
 		return RSEvidence{}, ReasonBenchmarkMissing
 	}
 	s0, s1 := s.Bars[t-n].Close, s.Bars[t].Close

@@ -109,7 +109,7 @@ describe("SavedScan", () => {
     const onOpen = vi.fn();
     renderSavedScan({ system: "sys-1" }, onOpen);
     fireEvent.click(await screen.findByRole("button", { name: "TCS" }));
-    expect(onOpen).toHaveBeenCalledWith("TCS");
+    expect(onOpen).toHaveBeenCalledWith("TCS", "weekly");
   });
 
   test("an unknown system in the URL says so instead of scanning", async () => {

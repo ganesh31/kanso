@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ParamSpec } from "@/api/client";
 import { Input } from "@/components/ui/input";
 import type { ParamValue, ParamValues } from "@/lib/scannerSearch";
@@ -66,18 +67,11 @@ export function ParamEditor({
               ) : null}
             </span>
             {s.kind === "number" ? (
-              <Input
+              <NumberInput
                 id={id}
-                type="number"
-                min={s.min}
-                max={s.max}
-                step={s.step > 0 ? s.step : "any"}
-                value={typeof value === "number" ? value : ""}
-                onChange={(e) => {
-                  const n = e.target.valueAsNumber;
-                  if (!Number.isNaN(n)) set(s.name, n);
-                }}
-                className="w-28"
+                spec={s}
+                value={typeof value === "number" ? value : undefined}
+                onChange={(n) => set(s.name, n)}
               />
             ) : (
               <Input
@@ -91,5 +85,49 @@ export function ParamEditor({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * A number field that can be cleared while typing a replacement: it keeps its own text and
+ * reports only valid numbers. Leaving it empty restores the last valid value.
+ */
+function NumberInput({
+  id,
+  spec,
+  value,
+  onChange,
+}: {
+  id: string;
+  spec: ParamSpec;
+  value: number | undefined;
+  onChange: (n: number) => void;
+}) {
+  const shown = value === undefined ? "" : String(value);
+  const [text, setText] = useState(shown);
+  const [synced, setSynced] = useState(shown);
+  if (shown !== synced) {
+    // The value changed from outside (a new pattern, a restored search): show it.
+    setSynced(shown);
+    if (Number(text) !== value) setText(shown);
+  }
+  return (
+    <Input
+      id={id}
+      type="number"
+      min={spec.min}
+      max={spec.max}
+      step={spec.step > 0 ? spec.step : "any"}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = e.target.valueAsNumber;
+        if (!Number.isNaN(n)) onChange(n);
+      }}
+      onBlur={() => {
+        if (text.trim() === "" || Number.isNaN(Number(text))) setText(shown);
+      }}
+      className="w-28"
+    />
   );
 }

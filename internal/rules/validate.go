@@ -133,6 +133,7 @@ func validateEntry(e *Entry, reg *patterns.Registry, ve *ValidationError) {
 	}
 	check("all", e.All)
 	check("any", e.Any)
+	checkOneBenchmark(e, ve)
 
 	for _, r := range requirers {
 		for _, need := range r.need {
@@ -152,4 +153,32 @@ func providersOf(reg *patterns.Registry, value string) string {
 		}
 	}
 	return strings.Join(out, " or ")
+}
+
+// checkOneBenchmark rejects relative-strength conditions that name
+// different benchmarks: report, scan and backtest load one benchmark per
+// system (Entry.Benchmark), so a second one would be silently ignored.
+// It runs after normalization, so an omitted benchmark is the default.
+func checkOneBenchmark(e *Entry, ve *ValidationError) {
+	first := ""
+	for _, g := range []struct {
+		name  string
+		conds []Condition
+	}{{"all", e.All}, {"any", e.Any}} {
+		for i, c := range g.conds {
+			if c.Type != patterns.TypeRelativeStrength {
+				continue
+			}
+			b := c.Params.String("benchmark")
+			if b == "" {
+				b = patterns.DefaultBenchmark
+			}
+			if first == "" {
+				first = b
+			} else if b != first {
+				ve.add(fmt.Sprintf("entry.%s[%d].params.benchmark", g.name, i),
+					"every relative strength condition must use the same benchmark (%s)", first)
+			}
+		}
+	}
 }

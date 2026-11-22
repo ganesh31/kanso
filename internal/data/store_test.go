@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -324,5 +325,31 @@ func TestMigrationsIdempotent(t *testing.T) {
 func TestOpenReadOnlyMissingFileFails(t *testing.T) {
 	if _, err := Open(filepath.Join(t.TempDir(), "missing.db"), true); err == nil {
 		t.Fatal("want error opening a missing file read-only")
+	}
+}
+
+func TestUpsertDailyIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	id := addInstrument(t, s, "TCS")
+	// SQLite stores NaN as NULL, which the NOT NULL numerator rejects: the
+	// split write fails after the bars were written in the same transaction.
+	bad := []Split{{Date: "2024-01-02", Numerator: math.NaN(), Denominator: 1}}
+	if err := s.UpsertDaily(ctx, id, bars(3, 10), bad); err == nil {
+		t.Fatal("UpsertDaily with an invalid split: want error")
+	}
+	got, err := s.Daily(ctx, id, "", "9999-12-31")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("bars after a failed UpsertDaily = %d, %v; want none", len(got), err)
+	}
+	good := []Split{{Date: "2024-01-02", Numerator: 2, Denominator: 1}}
+	if err := s.UpsertDaily(ctx, id, bars(3, 10), good); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Daily(ctx, id, "", "9999-12-31"); len(got) != 3 {
+		t.Fatalf("bars = %d, want 3", len(got))
+	}
+	if sp, _ := s.Splits(ctx, id); !cmp.Equal(good, sp) {
+		t.Fatalf("Splits = %+v", sp)
 	}
 }

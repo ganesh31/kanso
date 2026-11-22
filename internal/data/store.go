@@ -151,16 +151,32 @@ func (s *Store) UpsertInstrument(ctx context.Context, in market.Instrument) (int
 // UpsertBars writes bars in one transaction, replacing any stored bar with
 // the same (instrument, date).
 func (s *Store) UpsertBars(ctx context.Context, id int64, bars []market.Bar) error {
+	if err := s.inTx(ctx, func(q *db.Queries) error { return upsertBars(ctx, q, id, bars) }); err != nil {
+		return fmt.Errorf("upsert bars of %d: %w", id, err)
+	}
+	return nil
+}
+
+// UpsertDaily writes a fetch's bars and split events in one transaction,
+// so a failure leaves neither behind.
+func (s *Store) UpsertDaily(ctx context.Context, id int64, bars []market.Bar, splits []Split) error {
 	err := s.inTx(ctx, func(q *db.Queries) error {
-		for _, b := range bars {
-			if err := q.UpsertBar(ctx, db.UpsertBarParams(barParams(id, b))); err != nil {
-				return fmt.Errorf("bar %s: %w", b.Date, err)
-			}
+		if err := upsertBars(ctx, q, id, bars); err != nil {
+			return err
 		}
-		return nil
+		return upsertSplits(ctx, q, id, splits)
 	})
 	if err != nil {
-		return fmt.Errorf("upsert bars of %d: %w", id, err)
+		return fmt.Errorf("upsert daily of %d: %w", id, err)
+	}
+	return nil
+}
+
+func upsertBars(ctx context.Context, q *db.Queries, id int64, bars []market.Bar) error {
+	for _, b := range bars {
+		if err := q.UpsertBar(ctx, db.UpsertBarParams(barParams(id, b))); err != nil {
+			return fmt.Errorf("bar %s: %w", b.Date, err)
+		}
 	}
 	return nil
 }
@@ -194,17 +210,19 @@ func barParams(id int64, b market.Bar) db.InsertBarParams {
 
 // SaveSplits stores split events, replacing any on the same date.
 func (s *Store) SaveSplits(ctx context.Context, id int64, splits []Split) error {
-	return s.inTx(ctx, func(q *db.Queries) error {
-		for _, sp := range splits {
-			err := q.UpsertSplit(ctx, db.UpsertSplitParams{
-				InstrumentID: id, Date: string(sp.Date), Numerator: sp.Numerator, Denominator: sp.Denominator,
-			})
-			if err != nil {
-				return fmt.Errorf("split %s: %w", sp.Date, err)
-			}
+	return s.inTx(ctx, func(q *db.Queries) error { return upsertSplits(ctx, q, id, splits) })
+}
+
+func upsertSplits(ctx context.Context, q *db.Queries, id int64, splits []Split) error {
+	for _, sp := range splits {
+		err := q.UpsertSplit(ctx, db.UpsertSplitParams{
+			InstrumentID: id, Date: string(sp.Date), Numerator: sp.Numerator, Denominator: sp.Denominator,
+		})
+		if err != nil {
+			return fmt.Errorf("split %s: %w", sp.Date, err)
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // Splits returns an instrument's stored split events, oldest first.

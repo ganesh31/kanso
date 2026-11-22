@@ -98,17 +98,41 @@ func TestSimulateTieBreakBySymbol(t *testing.T) {
 }
 
 func TestSimulateExitsReleaseSlotSameDay(t *testing.T) {
-	cal := simDates(10)
-	sim := simulate([]Trade{
-		cand("AAA", cal, 1, 4, 100, 0.9),
-		cand("BBB", cal, 4, 9, 100, 0.1),
-	}, cal, 1000, 1, flatCloses("AAA", cal, 100), flatCloses("BBB", cal, 100))
-	got := takenSymbols(sim)
-	if len(got) != 2 || got[1] != "BBB@"+string(cal[4]) {
-		t.Fatalf("taken %v, want BBB entered on AAA's exit day %s", got, cal[4])
+	for _, tc := range []struct {
+		name   string
+		reason ExitReason
+		gapped bool
+	}{
+		{"trend exit", ExitTrend, false},
+		{"gapped stop", ExitStop, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cal := simDates(10)
+			aaa := cand("AAA", cal, 1, 4, 100, 0.9)
+			aaa.ExitReason, aaa.GappedStop = tc.reason, tc.gapped
+			sim := simulate([]Trade{aaa, cand("BBB", cal, 4, 9, 100, 0.1)},
+				cal, 1000, 1, flatCloses("AAA", cal, 100), flatCloses("BBB", cal, 100))
+			got := takenSymbols(sim)
+			if len(got) != 2 || got[1] != "BBB@"+string(cal[4]) {
+				t.Fatalf("taken %v, want BBB entered on AAA's exit day %s", got, cal[4])
+			}
+			if sim.Taken[1].Quantity != 10 {
+				t.Fatalf("BBB quantity %d, want 10: AAA's sale at the open returned the cash first", sim.Taken[1].Quantity)
+			}
+		})
 	}
-	if sim.Taken[1].Quantity != 10 {
-		t.Fatalf("BBB quantity %d, want 10: AAA's sale returned the cash first", sim.Taken[1].Quantity)
+}
+
+func TestSimulateIntradayStopReleasesAfterEntries(t *testing.T) {
+	cal := simDates(10)
+	aaa := cand("AAA", cal, 1, 4, 100, 0.9) // stop hit after the open on day 4
+	sim := simulate([]Trade{aaa, cand("BBB", cal, 4, 9, 100, 0.1)},
+		cal, 1000, 1, flatCloses("AAA", cal, 100), flatCloses("BBB", cal, 100))
+	if got := takenSymbols(sim); len(got) != 1 || got[0] != "AAA@"+string(cal[1]) {
+		t.Fatalf("taken %v, want AAA alone: at day 4's open AAA still holds the only slot", got)
+	}
+	if got := sim.Equity[4].Value; !near(got, 1000) {
+		t.Fatalf("equity on day 4 = %v, want 1000 (AAA sold, all cash)", got)
 	}
 }
 

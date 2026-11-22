@@ -72,20 +72,27 @@ const quickscan = vi.fn<(body: unknown) => ScanResult>();
 /** The fake server records created systems' bodies. */
 const createSystem = vi.fn<(body: unknown) => void>();
 
+/** When set, /api/patterns fails this many more times. */
+let patternFailures = 0;
+
 function Harness({
   initial = {},
   onOpen = () => {},
   onSaved = () => {},
 }: {
   initial?: ScannerSearch;
-  onOpen?: (s: string) => void;
+  onOpen?: (s: string, tf: string) => void;
   onSaved?: (id: string) => void;
 }) {
   const [search, setSearch] = useState<ScannerSearch>(initial);
   return <QuickScan search={search} onSearchChange={setSearch} onOpenReport={onOpen} onSaved={onSaved} />;
 }
 
-function renderQuickScan(initial?: ScannerSearch, onOpen?: (s: string) => void, onSaved?: (id: string) => void) {
+function renderQuickScan(
+  initial?: ScannerSearch,
+  onOpen?: (s: string, tf: string) => void,
+  onSaved?: (id: string) => void,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -104,7 +111,13 @@ describe("QuickScan", () => {
       fetch: async (input) => {
         const req = input as Request;
         const path = new URL(req.url).pathname;
-        if (path === "/api/patterns") return json(200, { patterns });
+        if (path === "/api/patterns") {
+          if (patternFailures > 0) {
+            patternFailures--;
+            return json(500, { title: "Internal Server Error", detail: "patterns unavailable" });
+          }
+          return json(200, { patterns });
+        }
         if (path === "/api/universes") {
           return json(200, { universes: [{ name: "NIFTY50", members: 50, has_history: false }] });
         }
@@ -150,6 +163,37 @@ describe("QuickScan", () => {
     expect(await screen.findByText("as of 2024-09-10")).toBeInTheDocument();
   });
 
+  test("a param can be cleared and retyped, and Enter submits the scan", async () => {
+    renderQuickScan();
+    await screen.findByRole("option", { name: "NIFTY50" });
+    const years = screen.getByLabelText(/Years/);
+    fireEvent.change(years, { target: { value: "" } });
+    expect(years).toHaveValue(null);
+    fireEvent.change(years, { target: { value: "5" } });
+    expect(years).toHaveValue(5);
+    fireEvent.submit(years.closest("form")!);
+    await waitFor(() => expect(quickscan).toHaveBeenCalled());
+    expect(quickscan).toHaveBeenLastCalledWith(expect.objectContaining({ params: { years: 5, all_time: false } }));
+  });
+
+  test("a failed pattern list is shown with a retry", async () => {
+    patternFailures = 1;
+    renderQuickScan();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the patterns and stock lists");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("option", { name: "Volume surge" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  test("a cleared param left empty shows its value again", async () => {
+    renderQuickScan();
+    await screen.findByRole("option", { name: "NIFTY50" });
+    const years = screen.getByLabelText(/Years/);
+    fireEvent.change(years, { target: { value: "" } });
+    fireEvent.blur(years);
+    expect(years).toHaveValue(3);
+  });
+
   test("fresh/all toggle changes the request mode", async () => {
     renderQuickScan({ pattern: "n_year_high", universe: "NIFTY50" });
     await waitFor(() => expect(quickscan).toHaveBeenCalledTimes(1));
@@ -188,7 +232,7 @@ describe("QuickScan", () => {
     renderQuickScan({ pattern: "volume_surge", universe: "NIFTY50" }, onOpen);
     expect(await screen.findByText("2 with stale data, 1 skipped")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "TCS" }));
-    expect(onOpen).toHaveBeenCalledWith("TCS");
+    expect(onOpen).toHaveBeenCalledWith("TCS", "daily");
   });
 
   test("validation errors are shown with their field", async () => {

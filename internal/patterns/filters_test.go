@@ -356,3 +356,43 @@ func evidenceFloats(ev Evidence) []float64 {
 	}
 	return nil
 }
+
+func TestRelativeStrengthDataGapInsideWindow(t *testing.T) {
+	stock := markGapBefore(closeSeries("TEST", 0, ramp(126, 0.20)), 60)
+	bench := closeSeries("^NSEI", 0, ramp(132, 0.10))
+	r := eval(t, RelativeStrength{}, NewContext(stock, bench), nil, 126)
+	if r.Evaluable || r.Evidence.(NotEvaluable).Reason != ReasonDataGap {
+		t.Fatalf("got %+v, want not evaluable: data gap", r)
+	}
+	if _, ok := RSDiff(NewContext(stock, bench), 6, 126); ok {
+		t.Fatal("RSDiff available across a data gap")
+	}
+}
+
+func TestRelativeStrengthNeedsCompleteBenchmarkWeek(t *testing.T) {
+	weekly := func(symbol string, ret float64) *market.Series {
+		s := closeSeries(symbol, 0, ramp(26, ret))
+		for i := range s.Bars {
+			s.Bars[i].Date = date(7 * i) // one bar per ISO week
+		}
+		s.Timeframe = market.Weekly
+		return s
+	}
+	stock, bench := weekly("TEST", 0.20), weekly("^NSEI", 0.10)
+	if r := eval(t, RelativeStrength{}, NewContext(stock, bench), nil, 26); !r.Pass {
+		t.Fatalf("complete benchmark week: got %+v, want pass", r)
+	}
+	bench.Complete = len(bench.Bars) - 1 // the benchmark's last week is still in progress
+	r := eval(t, RelativeStrength{}, NewContext(stock, bench), nil, 26)
+	if r.Evaluable || r.Evidence.(NotEvaluable).Reason != ReasonBenchmarkMissing {
+		t.Fatalf("got %+v, want not evaluable: benchmark week incomplete", r)
+	}
+}
+
+func TestVolumeSurgeDataGapInsideWindow(t *testing.T) {
+	s := markGapBefore(volumeSeries(priorThenToday(50, 100, 300)), 30)
+	r := eval(t, VolumeSurge{}, NewContext(s, nil), nil, 50)
+	if r.Evaluable || r.Evidence.(NotEvaluable).Reason != ReasonDataGap {
+		t.Fatalf("got %+v, want not evaluable: data gap", r)
+	}
+}

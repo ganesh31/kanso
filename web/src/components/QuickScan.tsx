@@ -117,7 +117,7 @@ export function QuickScan({
 }: {
   search: ScannerSearch;
   onSearchChange: (next: ScannerSearch) => void;
-  onOpenReport: (symbol: string) => void;
+  onOpenReport: (symbol: string, tf: Timeframe) => void;
   /** Called with the new system's id after "Save as system". */
   onSaved: (id: string) => void;
 }) {
@@ -142,60 +142,85 @@ export function QuickScan({
 
   const submit = () =>
     onSearchChange({ ...search, tab: "quick", pattern, params, universe, tf: tf === "daily" ? undefined : tf });
+  const metaError = patternsQ.error ?? universesQ.error;
 
   return (
     <div className="flex flex-col gap-6">
+      {metaError ? (
+        <div role="alert" className="flex flex-wrap items-center gap-3">
+          <p className="text-destructive">{`Couldn't load the patterns and stock lists: ${metaError.message}`}</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (patternsQ.isError) void patternsQ.refetch();
+              if (universesQ.isError) void universesQ.refetch();
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : null}
       <Card>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start gap-4">
-            <PatternPicker
-              patterns={patterns}
-              value={pattern}
-              onChange={(type) => setDraft((d) => ({ ...d, pattern: type, params: {} }))}
-            />
-            <label className="flex flex-col gap-1 text-sm">
-              <span>Stock list</span>
-              <select
-                aria-label="Stock list"
-                className={selectClass}
-                value={universe}
-                onChange={(e) => setDraft((d) => ({ ...d, universe: e.target.value }))}
-              >
-                {universes.map((u) => (
-                  <option key={u.name} value={u.name}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span>Timeframe</span>
-              <select
-                aria-label="Timeframe"
-                className={selectClass}
-                value={tf}
-                onChange={(e) => setDraft((d) => ({ ...d, tf: e.target.value as Timeframe }))}
-              >
-                {timeframes.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {meta ? (
-            <ParamEditor
-              specs={meta.params}
-              params={params}
-              onChange={(next) => setDraft((d) => ({ ...d, params: next }))}
-            />
-          ) : null}
-          <div>
-            <Button type="button" onClick={submit} disabled={!meta || !universe}>
-              Scan
-            </Button>
-          </div>
+        <CardContent>
+          <form
+            aria-label="Quick Scan"
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (meta && universe) submit();
+            }}
+          >
+            <div className="flex flex-wrap items-start gap-4">
+              <PatternPicker
+                patterns={patterns}
+                value={pattern}
+                onChange={(type) => setDraft((d) => ({ ...d, pattern: type, params: {} }))}
+              />
+              <label className="flex flex-col gap-1 text-sm">
+                <span>Stock list</span>
+                <select
+                  aria-label="Stock list"
+                  className={selectClass}
+                  value={universe}
+                  onChange={(e) => setDraft((d) => ({ ...d, universe: e.target.value }))}
+                >
+                  {universes.map((u) => (
+                    <option key={u.name} value={u.name}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span>Timeframe</span>
+                <select
+                  aria-label="Timeframe"
+                  className={selectClass}
+                  value={tf}
+                  onChange={(e) => setDraft((d) => ({ ...d, tf: e.target.value as Timeframe }))}
+                >
+                  {timeframes.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {meta ? (
+              <ParamEditor
+                specs={meta.params}
+                params={params}
+                onChange={(next) => setDraft((d) => ({ ...d, params: next }))}
+              />
+            ) : null}
+            <div>
+              <Button type="submit" disabled={!meta || !universe}>
+                Scan
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
 
@@ -212,7 +237,7 @@ export function QuickScan({
           result={scan.data}
           sort={search.sort}
           onSortChange={(sort) => onSearchChange({ ...search, sort })}
-          onOpen={onOpenReport}
+          onOpen={(symbol) => onOpenReport(symbol, request.timeframe ?? "daily")}
           footer={<SaveAsSystem request={request} autoInserted={scan.data.auto_inserted} onSaved={onSaved} />}
         >
           {scan.data.auto_inserted.map((type) => {

@@ -88,6 +88,22 @@ describe("Scanner", () => {
     expect(await screen.findByLabelText("Pattern")).toBeInTheDocument();
   });
 
+  test("arrow keys move between the tabs; only the selected tab is in the Tab order", async () => {
+    renderScanner();
+    const saved = screen.getByRole("tab", { name: "Saved system" });
+    const quick = screen.getByRole("tab", { name: "Quick Scan" });
+    expect(saved).toHaveAttribute("tabindex", "0");
+    expect(quick).toHaveAttribute("tabindex", "-1");
+    saved.focus();
+    fireEvent.keyDown(saved, { key: "ArrowRight" });
+    expect(search().tab).toBe("quick");
+    expect(quick).toHaveFocus();
+    expect(quick).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(quick, { key: "ArrowRight" });
+    expect(search().tab).toBe("saved");
+    expect(await screen.findByRole("tabpanel", { name: "Saved system" })).toBeInTheDocument();
+  });
+
   test("an old Quick Scan link without a tab still opens Quick Scan", async () => {
     renderScanner({ pattern: "volume_surge", universe: "NIFTY50" });
     expect(screen.getByRole("tab", { name: "Quick Scan" })).toHaveAttribute("aria-selected", "true");

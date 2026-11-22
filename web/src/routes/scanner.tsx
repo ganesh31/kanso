@@ -14,7 +14,9 @@ function ScannerPage() {
     <Scanner
       search={search}
       onSearchChange={(next) => void navigate({ search: next })}
-      onOpenReport={(symbol) => void navigate({ to: "/report/$symbol", params: { symbol } })}
+      onOpenReport={(symbol, tf) =>
+        void navigate({ to: "/report/$symbol", params: { symbol }, search: { tf: tf === "daily" ? undefined : tf } })
+      }
     />
   );
 }

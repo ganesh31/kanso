@@ -237,3 +237,21 @@ func TestValidateRejectsBadExitsAndPortfolio(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateRejectsMixedBenchmarks(t *testing.T) {
+	s := valid(
+		cond(patterns.TypeRelativeStrength, nil),
+		cond(patterns.TypeRelativeStrength, patterns.Params{"benchmark": "^NSEBANK"}),
+	)
+	errs := fieldErrors(t, s)
+	if !hasPath(errs, "entry.all[1].params.benchmark", "same benchmark (^NSEI)") {
+		t.Fatalf("errors %+v, want a mixed-benchmark error at entry.all[1]", errs)
+	}
+	same := valid(
+		cond(patterns.TypeRelativeStrength, patterns.Params{"benchmark": "^NSEBANK"}),
+		cond(patterns.TypeRelativeStrength, patterns.Params{"benchmark": "^NSEBANK", "rs_months": 3.0}),
+	)
+	if errs := fieldErrors(t, same); errs != nil {
+		t.Fatalf("one benchmark twice: %+v, want valid", errs)
+	}
+}

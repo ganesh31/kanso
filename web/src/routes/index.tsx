@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type Match, type System, useGetDefaultSystem, useScan } from "@/api/client";
+import { Button } from "@/components/ui/button";
 import { formatAge, formatPctVs, formatPrice } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -14,7 +15,23 @@ function Home() {
   const def = useGetDefaultSystem({ query: { select: (b) => b.system } });
   return (
     <div className="flex flex-col gap-12">
-      {def.data ? <TodaysBreakouts system={def.data} /> : <Intro />}
+      {def.data ? (
+        <TodaysBreakouts system={def.data} />
+      ) : def.isError ? (
+        <header className="flex flex-col gap-3">
+          <h1 className="text-4xl font-bold tracking-tight">Breaking out today</h1>
+          <p role="alert" className="text-destructive">
+            {`Couldn't load the default system, so today's scan can't run: ${def.error.message}`}
+          </p>
+          <div>
+            <Button type="button" variant="outline" onClick={() => void def.refetch()}>
+              Try again
+            </Button>
+          </div>
+        </header>
+      ) : (
+        <Intro />
+      )}
       <section aria-labelledby="views" className="flex flex-col gap-4">
         <h2 id="views" className="text-lg font-bold">
           Three ways in

@@ -58,7 +58,10 @@ type position struct {
 // Simulate runs the portfolio over the candidates (a trade path for every
 // signal) on calendar, ascending dates (spec §5.6). On each date:
 //
-//   - Exits dated that day fill first and release their slots and cash.
+//   - Exits that fill at that day's open (trend exits, and stops the open
+//     gapped below) go first and release their slots and cash. An intraday
+//     stop fills after the open, so its slot and cash come back only after
+//     the day's entries.
 //   - Entries dated that day are ranked by RankKey (descending) then symbol
 //     (ascending). A candidate is passed over while the portfolio holds its
 //     symbol or no slot is free. Otherwise it gets min(equity ÷
@@ -89,10 +92,10 @@ func Simulate(cands []Trade, closes map[string]*market.Series, calendar []market
 		notional := float64(pos.tr.Quantity) * pos.tr.ExitPrice
 		cash += notional - cm.Cost(notional, Sell)
 	}
-	exitDue := func(d market.Date) {
+	exitDue := func(d market.Date, atOpenOnly bool) {
 		kept := held[:0]
 		for _, pos := range held {
-			if pos.tr.ExitDate == d && pos.tr.ExitReason != ExitOpen {
+			if pos.tr.ExitDate == d && pos.tr.ExitReason != ExitOpen && (!atOpenOnly || fillsAtOpen(pos.tr)) {
 				sell(pos)
 				continue
 			}
@@ -108,7 +111,7 @@ func Simulate(cands []Trade, closes map[string]*market.Series, calendar []market
 		for next < len(order) && order[next].EntryDate < d {
 			next++ // not on the calendar
 		}
-		exitDue(d)
+		exitDue(d, true)
 		for ; next < len(order) && order[next].EntryDate == d; next++ {
 			tr := order[next]
 			if len(held) >= p.MaxPositions || holds(tr.Symbol) {
@@ -132,7 +135,7 @@ func Simulate(cands []Trade, closes map[string]*market.Series, calendar []market
 			held = append(held, position{tr: tr, last: -1})
 			sim.Taken = append(sim.Taken, tr)
 		}
-		exitDue(d)
+		exitDue(d, false)
 
 		equity := cash
 		for i := range held {
@@ -157,4 +160,10 @@ func Simulate(cands []Trade, closes map[string]*market.Series, calendar []market
 		sim.Exposure = float64(invested) / float64(len(calendar))
 	}
 	return sim
+}
+
+// fillsAtOpen reports whether tr's exit fills at its exit day's open, before
+// that day's entries: a trend exit, or a stop the open gapped below.
+func fillsAtOpen(tr Trade) bool {
+	return tr.ExitReason == ExitTrend || (tr.ExitReason == ExitStop && tr.GappedStop)
 }

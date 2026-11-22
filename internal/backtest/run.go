@@ -147,6 +147,9 @@ func Run(ctx context.Context, prov market.Provider, sys rules.System, from, to m
 	res.TradeStats = ComputeTradeStats(res.AllTrades)
 
 	cal := calendar(bench, closes, cands, start)
+	if res.Honesty.DataStart == "" && len(cal) > 0 {
+		res.Honesty.DataStart = cal[0] // no requested start and no benchmark bars
+	}
 	sim := Simulate(cands, closes, cal, sys.Portfolio, ex, cm)
 	res.Taken, res.Equity, res.Honesty.SkippedSignals = sim.Taken, sim.Equity, sim.Skipped
 	res.Benchmark = buyAndHold(bench, cal, sys.Portfolio.Capital)
@@ -164,11 +167,11 @@ func Run(ctx context.Context, prov market.Provider, sys rules.System, from, to m
 
 // calendar is the dates the portfolio walks, from start: the benchmark's
 // trading days plus any candidate entry or exit date it lacks, so no fill
-// is lost to a benchmark holiday. Without a benchmark it is every
+// is lost to a benchmark holiday. Without benchmark bars it is every
 // instrument's trading days.
 func calendar(bench *market.Series, closes map[string]*market.Series, cands []Trade, start market.Date) []market.Date {
 	var dates []market.Date
-	if bench != nil {
+	if bench != nil && len(bench.Bars) > 0 {
 		for _, b := range bench.Bars {
 			dates = append(dates, b.Date)
 		}

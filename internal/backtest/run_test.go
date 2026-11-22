@@ -171,7 +171,7 @@ func TestRunPortfolioAndBenchmark(t *testing.T) {
 	if len(res.Taken) == 0 || len(res.Equity) == 0 || len(res.Equity) != len(res.Benchmark) {
 		t.Fatalf("taken %d, equity %d, benchmark %d points", len(res.Taken), len(res.Equity), len(res.Benchmark))
 	}
-	if res.Equity[0].Date != res.Honesty.DataStart || res.Equity[0].Value != 1_000_000 || res.Benchmark[0].Value != 1_000_000 {
+	if res.Equity[0].Date != res.Honesty.DataStart || !near(res.Equity[0].Value, 1_000_000) || !near(res.Benchmark[0].Value, 1_000_000) {
 		t.Fatalf("curves start %+v / %+v, want 1,000,000 on %s", res.Equity[0], res.Benchmark[0], res.Honesty.DataStart)
 	}
 	p := res.Portfolio
@@ -213,5 +213,26 @@ func TestRunUnknownUniverse(t *testing.T) {
 	s.Universe = "NOPE"
 	if _, err := Run(context.Background(), runProvider("2015-01-05"), s, "", ""); !errors.Is(err, market.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRunBenchmarkWithoutBarsUsesStockDates(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 11))
+	insts := []market.Instrument{
+		{ID: 1, Symbol: "RW", Type: market.Equity},
+		{ID: 3, Symbol: market.Benchmark, Type: market.Index},
+	}
+	prov := market.NewMemProvider(insts,
+		map[string][]market.Bar{"RW": randomWalk(r, 600, 0.0015)},
+		map[string][]string{"TEST": {"RW"}})
+	res, err := Run(context.Background(), prov, testSystem(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Equity) == 0 {
+		t.Fatal("no equity curve: the calendar ignored the stock's dates")
+	}
+	if res.Honesty.DataStart == "" || res.Honesty.DataStart != res.Equity[0].Date {
+		t.Fatalf("DataStart = %q, want the first simulated date %s", res.Honesty.DataStart, res.Equity[0].Date)
 	}
 }

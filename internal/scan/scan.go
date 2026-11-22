@@ -225,7 +225,13 @@ func scanOne(ctx context.Context, prov market.Provider, inst market.Instrument, 
 func provisional(pctx *patterns.Context, c *rules.Compiled) (rules.Outcome, error) {
 	s := *pctx.Series
 	s.Complete = len(s.Bars)
-	pc := patterns.NewContext(&s, pctx.Bench)
+	bench := pctx.Bench
+	if bench != nil {
+		b := *bench
+		b.Complete = len(b.Bars) // the benchmark's week in progress, too
+		bench = &b
+	}
+	pc := patterns.NewContext(&s, bench)
 	if err := c.Prepare(pc); err != nil {
 		return rules.Outcome{}, err
 	}
