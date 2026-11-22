@@ -47,6 +47,11 @@ type Summary struct {
 	Bars int `json:"bars"`
 	// Failed lists the symbols that wrote nothing, in run order.
 	Failed []string `json:"failed"`
+	// AsOf is the benchmark's latest stored date after the run.
+	AsOf market.Date `json:"as_of"`
+	// Behind lists the stock list's members whose latest bar is older than
+	// AsOf, by symbol.
+	Behind []string `json:"behind"`
 }
 
 // TooManyFailures reports whether more than 5% of symbols failed.
@@ -194,6 +199,10 @@ func run(ctx context.Context, st *data.Store, opts Options, ingestOne ingestFunc
 		if err := st.LogIngest(ctx, in.ID, status, msg); err != nil {
 			return sum, fmt.Errorf("log ingest %s: %w", in.Symbol, err)
 		}
+	}
+	var err error
+	if sum.AsOf, sum.Behind, err = Behind(ctx, st, opts.Universe); err != nil {
+		return sum, fmt.Errorf("freshness: %w", err)
 	}
 	return sum, nil
 }

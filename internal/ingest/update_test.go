@@ -69,6 +69,24 @@ func backfilled(t *testing.T, src *fakeSource, to market.Date) *data.Store {
 	return st
 }
 
+func TestIngestSummaryReportsBehindInstruments(t *testing.T) {
+	src := &fakeSource{bars: map[string][]market.Bar{
+		"^NSEI":   weekdays("2026-11-02", 13, 24000), // through 2026-11-18
+		"INFY.NS": weekdays("2026-11-02", 13, 1500),
+		"TCS.NS":  weekdays("2026-11-02", 12, 4000), // Yahoo lags: through 2026-11-17
+	}}
+	sum, err := Update(context.Background(), openStore(t), src, optsTo("2026-11-18", "TCS", "INFY"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.AsOf != "2026-11-18" || !cmp.Equal([]string{"TCS"}, sum.Behind) {
+		t.Fatalf("as of %q, behind %v", sum.AsOf, sum.Behind)
+	}
+	if got, want := sum.Freshness(), "data as of 2026-11-18; 1 instrument behind: TCS"; got != want {
+		t.Fatalf("Freshness() = %q, want %q", got, want)
+	}
+}
+
 func TestBackfillRerunWithLaterFromKeepsOneBasis(t *testing.T) {
 	src := &fakeSource{bars: map[string][]market.Bar{"TCS.NS": weekdays("2016-01-01", 2000, 200), "^NSEI": weekdays("2016-01-01", 2000, 21000)}}
 	st := backfilled(t, src, "2023-08-31")
