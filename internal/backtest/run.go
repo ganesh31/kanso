@@ -16,47 +16,8 @@ import (
 	"kanso/internal/rules"
 )
 
-// Honesty-panel wording (spec §5.8).
-const (
-	FillModel  = "next-day open"
-	DataSource = "Yahoo Finance"
-	Adjustment = "split-adjusted, not dividend-adjusted"
-)
-
-// Skip reasons for instruments.
-const (
-	SkipNoData = "no_data"
-)
-
 // rankMonths is the RS window that ranks crowded entry days (spec §5.6).
 const rankMonths = 6
-
-// SkippedInstrument is a stock list member the backtest could not use.
-type SkippedInstrument struct {
-	Symbol string
-	Reason string
-}
-
-// Honesty is what the honesty panel shows next to the results (spec §5.8).
-type Honesty struct {
-	FillModel   string
-	PerSidePct  float64
-	SlippagePct float64
-	// Survivorship is true when the stock list is today's members only.
-	Survivorship bool
-	DataSource   string
-	Adjustment   string
-	// DataStart and DataEnd are the window actually used: the start is
-	// the later of the requested start and the benchmark's first date.
-	DataStart market.Date
-	DataEnd   market.Date
-	// RankingRule says how crowded entry days are ranked.
-	RankingRule string
-	Skipped     []SkippedInstrument
-	// SkippedSignals are portfolio candidates with a free slot that could
-	// not buy one whole share, by entry date.
-	SkippedSignals []SkippedSignal
-}
 
 // Result is a backtest's output.
 type Result struct {
