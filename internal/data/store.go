@@ -263,6 +263,13 @@ func (s *Store) LatestBarDate(ctx context.Context, id int64) (market.Date, error
 	return market.Date(d), err
 }
 
+// EarliestBarDate returns the date of the instrument's first stored bar,
+// or "" when it has none.
+func (s *Store) EarliestBarDate(ctx context.Context, id int64) (market.Date, error) {
+	d, err := s.q.EarliestBarDate(ctx, id)
+	return market.Date(d), err
+}
+
 // ReplaceUniverse makes ids the members of the named universe (creating
 // it if needed). Members are written with from_date NULL: their history
 // is unknown.

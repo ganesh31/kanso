@@ -143,20 +143,41 @@ func TestBackfillRerunWithLaterFromKeepsOneBasis(t *testing.T) {
 	st := backfilled(t, src, "2023-08-31")
 
 	// A split since: Yahoo now serves all history at half. Rerunning the
-	// backfill from 2020 must not keep the pre-2020 bars at the old scale.
+	// backfill from 2020 must neither drop the 2016-2019 bars nor keep
+	// them at the old scale.
 	src.bars["TCS.NS"] = weekdays("2016-01-01", 2000, 100)
 	o := optsTo("2023-08-31", "TCS")
 	o.From = "2020-01-01"
 	if _, err := Backfill(context.Background(), st, src, o); err != nil {
 		t.Fatal(err)
 	}
-	for _, b := range storedBars(t, st, "TCS") {
-		if b.Close != 100 {
-			t.Fatalf("bar %s close %v: history mixes adjustment bases", b.Date, b.Close)
-		}
+	if diff := cmp.Diff(weekdays("2016-01-01", 2000, 100), storedBars(t, st, "TCS")); diff != "" {
+		t.Fatalf("TCS history dropped or on mixed bases (-want +got):\n%s", diff)
 	}
-	if got := storedBars(t, st, "TCS"); got[0].Date != "2020-01-01" {
-		t.Fatalf("first bar %s, want 2020-01-01 (history is what the backfill fetched)", got[0].Date)
+	if got := src.asked[1]; got != "TCS.NS 2016-01-01..2023-08-31" {
+		t.Fatalf("asked %q, want the fetch widened to the earliest stored bar", got)
+	}
+}
+
+func TestUpdateRefetchKeepsHistoryBeforeFrom(t *testing.T) {
+	src := &fakeSource{
+		bars:  map[string][]market.Bar{"TCS.NS": weekdays("2003-01-01", 300, 200), "^NSEI": weekdays("2003-01-01", 305, 21000)},
+		split: map[string][]data.Split{},
+	}
+	st := openStore(t)
+	o := optsTo("2004-02-24", "TCS")
+	o.From = "2003-01-01"
+	if _, err := Backfill(context.Background(), st, src, o); err != nil {
+		t.Fatal(err)
+	}
+	// The update runs with the default -from (2005), after a split.
+	src.bars["TCS.NS"] = weekdays("2003-01-01", 305, 100)
+	src.split["TCS.NS"] = []data.Split{{Date: "2004-02-27", Numerator: 2, Denominator: 1}}
+	if _, err := Update(context.Background(), st, src, optsTo("2004-03-02", "TCS")); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(weekdays("2003-01-01", 305, 100), storedBars(t, st, "TCS")); diff != "" {
+		t.Fatalf("TCS history (-want +got):\n%s", diff)
 	}
 }
 

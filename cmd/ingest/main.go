@@ -5,7 +5,9 @@
 //	ingest -db kanso.db -universe NIFTY500 -constituents ind_nifty500list.csv [-from 2005-01-01] [-to YYYY-MM-DD] [-update] [-only-if-behind]
 //
 // -update fetches each symbol from its last stored date minus 10 days and
-// refetches the full history from -from after a split or restatement.
+// refetches the full history after a split or restatement. A full fetch
+// (a backfill or a refetch) starts at -from or the first stored bar,
+// whichever is earlier, so stored history is never dropped.
 // -only-if-behind (with -update, for the morning run) exits 0 without
 // fetching unless an instrument is behind ^NSEI or ^NSEI has no bar for
 // the previous weekday.

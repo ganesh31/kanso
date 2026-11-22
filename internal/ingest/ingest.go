@@ -61,16 +61,16 @@ func (s Summary) TooManyFailures() bool {
 
 // Backfill seeds the universe from opts.Symbols (membership start unknown)
 // and fetches every symbol's history, the benchmark ^NSEI first as an
-// index. The fetch replaces the symbol's stored history, so a rerun with a
-// later From drops the older bars rather than keep them on a basis the
-// source may since have rescaled. Each symbol gets an ingest_log entry; a
-// symbol whose fetch fails or returns no bars writes nothing and is listed
-// in Summary.Failed. The error is only for store failures that stop the
-// run.
+// index. The fetch starts at the earlier of From and the symbol's first
+// stored bar and replaces its stored history, so a rerun with a later From
+// drops nothing and every bar is on the source's current adjustment basis.
+// Each symbol gets an ingest_log entry; a symbol whose fetch fails or
+// returns no bars writes nothing and is listed in Summary.Failed. The
+// error is only for store failures that stop the run.
 func Backfill(ctx context.Context, st *data.Store, src data.Source, opts Options) (Summary, error) {
 	return run(ctx, st, opts, func(in market.Instrument) (int, string, error) {
-		n, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
-		return n, fmt.Sprintf("%d bars %s..%s", n, opts.From, opts.To), err
+		n, from, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
+		return n, fmt.Sprintf("%d bars %s..%s", n, from, opts.To), err
 	})
 }
 
@@ -85,7 +85,7 @@ func Update(ctx context.Context, st *data.Store, src data.Source, opts Options) 
 			return 0, "", fmt.Errorf("%w: %w", errStore, err)
 		}
 		if latest == "" {
-			n, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
+			n, _, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
 			return n, fmt.Sprintf("%d bars %s..%s (new)", n, opts.From, opts.To), err
 		}
 		from := market.Date(latest.Time().AddDate(0, 0, -updateOverlapDays).Format(market.DateLayout))
@@ -98,11 +98,11 @@ func Update(ctx context.Context, st *data.Store, src data.Source, opts Options) 
 			return 0, "", fmt.Errorf("%w: %w", errStore, err)
 		}
 		if reason := refetchReason(from, splits, stored, bars); reason != "" {
-			n, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
+			n, fullFrom, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
 			if err != nil {
 				return 0, "", fmt.Errorf("refetch after %s: %w", reason, err)
 			}
-			return n, fmt.Sprintf("refetched: %s; %d bars %s..%s", reason, n, opts.From, opts.To), nil
+			return n, fmt.Sprintf("refetched: %s; %d bars %s..%s", reason, n, fullFrom, opts.To), nil
 		}
 		if err := st.UpsertDaily(ctx, in.ID, bars, splits); err != nil {
 			return 0, "", fmt.Errorf("%w: %w", errStore, err)
@@ -223,17 +223,26 @@ func fetch(ctx context.Context, src data.Source, in market.Instrument, from, to 
 	return bars, splits, nil
 }
 
-// fetchFull fetches an instrument's history in [from, to] and atomically
-// replaces its stored bars with it, returning the bars written.
-func fetchFull(ctx context.Context, st *data.Store, src data.Source, in market.Instrument, from, to market.Date) (int, error) {
+// fetchFull fetches an instrument's history from the earlier of from and
+// its first stored bar to to, and atomically replaces its stored bars with
+// it, so nothing is dropped and every bar is on the source's current
+// adjustment basis. It returns the bars written and the start fetched.
+func fetchFull(ctx context.Context, st *data.Store, src data.Source, in market.Instrument, from, to market.Date) (int, market.Date, error) {
+	earliest, err := st.EarliestBarDate(ctx, in.ID)
+	if err != nil {
+		return 0, "", fmt.Errorf("%w: %w", errStore, err)
+	}
+	if earliest != "" && earliest < from {
+		from = earliest
+	}
 	bars, splits, err := fetch(ctx, src, in, from, to)
 	if err != nil {
-		return 0, err
+		return 0, from, err
 	}
 	if err := st.ReplaceDaily(ctx, in.ID, bars, splits); err != nil {
-		return 0, fmt.Errorf("%w: %w", errStore, err)
+		return 0, from, fmt.Errorf("%w: %w", errStore, err)
 	}
-	return len(bars), nil
+	return len(bars), from, nil
 }
 
 // YahooTicker is the Yahoo symbol of an NSE instrument: indices ("^NSEI")

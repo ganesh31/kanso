@@ -285,6 +285,21 @@ func TestLatestBarDate(t *testing.T) {
 	}
 }
 
+func TestEarliestBarDate(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	id := addInstrument(t, s, "TCS")
+	if d, err := s.EarliestBarDate(ctx, id); err != nil || d != "" {
+		t.Fatalf("no bars: %q, %v", d, err)
+	}
+	if err := s.UpsertBars(ctx, id, bars(4, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := s.EarliestBarDate(ctx, id); err != nil || d != "2024-01-01" {
+		t.Fatalf("got %q, %v; want 2024-01-01", d, err)
+	}
+}
+
 func TestSaveSplitsAndLogIngest(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openTemp(t)

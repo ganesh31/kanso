@@ -124,7 +124,7 @@ go run ./cmd/ingest -db kanso.db -universe NIFTY50 -constituents ind_nifty50list
 go run ./cmd/ingest -db kanso.db -universe NIFTY50 -constituents ind_nifty50list.csv -update -only-if-behind
 ```
 
-Example launchd jobs for both runs are in [`deploy/launchd/`](deploy/launchd/); edit their paths before loading them. A full backfill (without `-update`) replaces each symbol's stored history with what it fetched, so re-running it with a later `-from` drops the older bars.
+Example launchd jobs for both runs are in [`deploy/launchd/`](deploy/launchd/); edit their paths before loading them. A full fetch (a backfill without `-update`, or a re-fetch after a split) starts at `-from` or the symbol's first stored bar, whichever is earlier, and replaces its history in one step: re-running with a later `-from` keeps the older bars and puts them on Yahoo's current adjustment.
 
 ## Tests
 
