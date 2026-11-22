@@ -30,7 +30,7 @@ web:
 build:
 	go build -trimpath -o bin/server ./cmd/server
 
-# Serve the API and built web app on :8080 from an ingested database: make run DB=kanso.db
+# Serve the API and built web app on 127.0.0.1:8080 from an ingested database: make run DB=kanso.db
 run: build
 	./bin/server -db $(DB)
 

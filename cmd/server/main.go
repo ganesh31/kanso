@@ -29,7 +29,7 @@ func main() {
 
 func run() error {
 	dbPath := flag.String("db", "", "SQLite database written by cmd/ingest (saved systems are written to it)")
-	addr := flag.String("addr", ":8080", "listen address")
+	addr := flag.String("addr", "127.0.0.1:8080", "listen address (localhost only by default: saved systems are writable without auth)")
 	webDir := flag.String("web", "web/dist", "directory of the built web app (empty: none)")
 	dump := flag.Bool("dump-openapi", false, "print the OpenAPI spec as JSON and exit")
 	flag.Parse()
