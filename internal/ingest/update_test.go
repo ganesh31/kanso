@@ -185,6 +185,22 @@ func TestUpdateUpsertsWhenOverlapMatches(t *testing.T) {
 	}
 }
 
+func TestUpdateTwiceIsIdempotent(t *testing.T) {
+	src := &fakeSource{bars: map[string][]market.Bar{"TCS.NS": weekdays("2024-01-01", 70, 100), "^NSEI": weekdays("2024-01-01", 70, 21000)}}
+	st := backfilled(t, src, "2024-03-29")
+	for range 2 {
+		if _, err := Update(context.Background(), st, src, optsTo("2024-04-05", "TCS")); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(weekdays("2024-01-01", 70, 100), storedBars(t, st, "TCS")); diff != "" {
+			t.Fatalf("TCS bars (-want +got):\n%s", diff)
+		}
+		if e := lastLog(t, st, "TCS"); strings.Contains(e.Message, "refetched") {
+			t.Fatalf("unchanged data refetched: %+v", e)
+		}
+	}
+}
+
 func TestUpdateRefetchesWhenOverlapRestated(t *testing.T) {
 	old := weekdays("2024-01-01", 65, 100) // through 2024-03-29
 	src := &fakeSource{bars: map[string][]market.Bar{"TCS.NS": old, "^NSEI": weekdays("2024-01-01", 65, 21000)}}
