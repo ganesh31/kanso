@@ -15,14 +15,28 @@ export default defineConfig({
     proxy: { "/api": api, "/docs": api, "/openapi.json": api },
   },
   lint: {
-    ignorePatterns: ["dist/**", "src/api/generated.ts", "src/routeTree.gen.ts"],
+    ignorePatterns: [
+      "dist/**",
+      "playwright-report/**",
+      "test-results/**",
+      "src/api/generated.ts",
+      "src/routeTree.gen.ts",
+    ],
     options: { typeAware: true, typeCheck: true },
   },
   fmt: {
     printWidth: 120,
-    ignorePatterns: ["src/api/generated.ts", "src/routeTree.gen.ts", "pnpm-lock.yaml"],
+    ignorePatterns: [
+      "playwright-report/**",
+      "test-results/**",
+      "src/api/generated.ts",
+      "src/routeTree.gen.ts",
+      "pnpm-lock.yaml",
+    ],
   },
   test: {
+    // Unit tests only; e2e/ is Playwright's (pnpm exec playwright test).
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: false,

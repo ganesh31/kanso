@@ -61,5 +61,8 @@ demo-snapshot:
 	rm -f deploy/demo.db deploy/demo.db-wal deploy/demo.db-shm
 	go run ./cmd/ingest -db deploy/demo.db -universe NIFTY50 -constituents deploy/nifty50.csv -compact
 
-e2e:
-	@echo "make $@: not implemented yet (later V1 ticket)"; exit 1
+# The Playwright interviewer flow (spec §10) against the built server in demo
+# mode, on a database built from testdata/benchmark/bars.parquet (no network).
+# Port 8099 by default (KANSO_E2E_PORT=...). Needs `pnpm exec playwright install chromium` once.
+e2e: build
+	cd web && pnpm exec playwright test
