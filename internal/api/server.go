@@ -26,7 +26,13 @@ type Config struct {
 	Static fs.FS
 	// Logger logs one line per request; nil disables request logging.
 	Logger *slog.Logger
+	// MaxBars caps the bars one /api/bars response serves (spec §6.4);
+	// 0 means DefaultMaxBars.
+	MaxBars int
 }
+
+// DefaultMaxBars is the /api/bars cap when Config.MaxBars is 0.
+const DefaultMaxBars = 5000
 
 func init() {
 	// Kanso never sends null for a list, so the generated client needn't
@@ -48,7 +54,11 @@ func init() {
 func New(prov market.Provider, systems SystemStore, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	api := newAPI(mux)
-	register(api, &handlers{prov: prov, systems: systems})
+	maxBars := cfg.MaxBars
+	if maxBars <= 0 {
+		maxBars = DefaultMaxBars
+	}
+	register(api, &handlers{prov: prov, systems: systems, maxBars: maxBars})
 	mux.Handle("/", spa(cfg.Static))
 	if cfg.Logger == nil {
 		return mux
