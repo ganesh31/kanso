@@ -50,13 +50,13 @@ func refuseSystemWrites(api huma.API) func(huma.Context, func(huma.Context)) {
 
 // limitRate answers a rate-limited operation with a 429 problem and a
 // Retry-After header once the client IP is over its limit.
-func limitRate(api huma.API, l *limiter) func(huma.Context, func(huma.Context)) {
+func limitRate(api huma.API, l *limiter, proxies int) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		if !rateLimited[ctx.Operation().OperationID] {
 			next(ctx)
 			return
 		}
-		if wait, ok := l.allow(clientIP(ctx.Header("X-Forwarded-For"), ctx.RemoteAddr())); !ok {
+		if wait, ok := l.allow(clientIP(ctx.Header("X-Forwarded-For"), ctx.RemoteAddr(), proxies)); !ok {
 			secs := int(math.Ceil(wait.Seconds()))
 			ctx.SetHeader("Retry-After", strconv.Itoa(secs))
 			_ = huma.WriteErr(api, ctx, http.StatusTooManyRequests,
@@ -67,11 +67,20 @@ func limitRate(api huma.API, l *limiter) func(huma.Context, func(huma.Context)) 
 	}
 }
 
-// clientIP is the first X-Forwarded-For hop when there is one (the demo
-// runs behind one proxy), else the connection's address without its port.
-func clientIP(xff, remoteAddr string) string {
-	if first, _, _ := strings.Cut(xff, ","); strings.TrimSpace(first) != "" {
-		return strings.TrimSpace(first)
+// clientIP is the address a rate limit can trust. Each of the proxies
+// trusted proxies in front of the server appends the address it saw to
+// X-Forwarded-For, so the client is the proxies-th entry from the right;
+// entries left of it were written by the client and can be anything. With
+// no trusted proxies (or a header too short to have come through them) it
+// is the connection's address without its port.
+func clientIP(xff, remoteAddr string, proxies int) string {
+	if proxies > 0 && xff != "" {
+		hops := strings.Split(xff, ",")
+		if len(hops) >= proxies {
+			if ip := strings.TrimSpace(hops[len(hops)-proxies]); ip != "" {
+				return ip
+			}
+		}
 	}
 	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
 		return host

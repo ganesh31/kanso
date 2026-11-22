@@ -118,7 +118,7 @@ The public demo is the same binary started with `-demo`:
 
 - The database opens read-only. `POST`, `PUT` and `DELETE /api/systems` return 403, so the server stores nothing.
 - The web app notices the first 403 and from then on keeps the visitor's saved systems in the browser's localStorage (or in memory, if storage is blocked). The variation count is already kept there.
-- Backtest, scan, Quick Scan, Stock Report and bars share a per-IP limit of 60 requests a minute (`-rate-limit`). The client IP is the first `X-Forwarded-For` hop, else the connection's address. Over the limit, the answer is a 429 problem with `Retry-After`.
+- Backtest, scan, Quick Scan, Stock Report and bars share a per-IP limit of 60 requests a minute (`-rate-limit`). The client IP is the connection's address unless `-trusted-proxies N` says N proxies in front of the server append to `X-Forwarded-For`; then it is the Nth entry from the right, since everything left of that was written by the client. Over the limit, the answer is a 429 problem with `Retry-After`.
 - `/api/bars` serves at most 5,000 bars per request, so the data can't be bulk-downloaded.
 - Every request is logged as one JSON line (method, path, status, IP, duration).
 
@@ -149,6 +149,8 @@ docker push $IMAGE
 gcloud run deploy kanso --image $IMAGE --region asia-south1 \
   --max-instances 1 --memory 512Mi --allow-unauthenticated
 ```
+
+Behind Cloud Run every request comes from Google's front end, so without `-trusted-proxies` all visitors share one limit. Set it to the number of proxies that append to `X-Forwarded-For`: check the header a test request receives on the deployed service before trusting a value (one hop for a plain `run.app` URL; an external HTTPS load balancer adds another). The image's entrypoint leaves it at 0, so add it to the deploy's arguments.
 
 The CI deploy (Workload Identity Federation, Artifact Registry) is deferred until the public demo is wanted.
 

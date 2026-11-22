@@ -37,6 +37,10 @@ type Config struct {
 	// backtest, scan, quickscan, report and bars; 0 means DefaultRateLimit.
 	// It has no effect outside demo mode.
 	RateLimit int
+	// TrustedProxies is how many proxies in front of the server append to
+	// X-Forwarded-For (1 behind Cloud Run). 0 ignores the header, which a
+	// client can set to anything, and uses the connection's address.
+	TrustedProxies int
 
 	// now is the rate limiter's clock; nil means time.Now.
 	now func() time.Time
@@ -74,14 +78,14 @@ func New(prov market.Provider, systems SystemStore, cfg Config) http.Handler {
 		if limit <= 0 {
 			limit = DefaultRateLimit
 		}
-		api.UseMiddleware(refuseSystemWrites(api), limitRate(api, newLimiter(limit, cfg.now)))
+		api.UseMiddleware(refuseSystemWrites(api), limitRate(api, newLimiter(limit, cfg.now), cfg.TrustedProxies))
 	}
 	register(api, &handlers{prov: prov, systems: systems, maxBars: maxBars})
 	mux.Handle("/", spa(cfg.Static))
 	if cfg.Logger == nil {
 		return mux
 	}
-	return logRequests(cfg.Logger, mux)
+	return logRequests(cfg.Logger, mux, cfg.TrustedProxies)
 }
 
 func newAPI(mux *http.ServeMux) huma.API {
@@ -160,13 +164,13 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-func logRequests(log *slog.Logger, next http.Handler) http.Handler {
+func logRequests(log *slog.Logger, next http.Handler, proxies int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 		log.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status,
-			"ip", clientIP(r.Header.Get("X-Forwarded-For"), r.RemoteAddr),
+			"ip", clientIP(r.Header.Get("X-Forwarded-For"), r.RemoteAddr, proxies),
 			"duration_ms", time.Since(start).Milliseconds())
 	})
 }

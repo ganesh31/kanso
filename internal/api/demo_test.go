@@ -61,7 +61,7 @@ func doFrom(t *testing.T, srv *httptest.Server, xff, method, path, body string) 
 
 func TestDemoRateLimit429(t *testing.T) {
 	now := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
-	srv := serverWith(t, Config{Demo: true, RateLimit: 2, now: func() time.Time { return now }})
+	srv := serverWith(t, Config{Demo: true, RateLimit: 2, TrustedProxies: 1, now: func() time.Time { return now }})
 	limited := []struct{ method, path, body string }{
 		{"POST", "/api/backtest", breakoutSys},
 		{"POST", "/api/scan", `{"system":` + breakoutSys + `}`},
@@ -72,8 +72,8 @@ func TestDemoRateLimit429(t *testing.T) {
 	for i, c := range limited {
 		ip := fmt.Sprintf("203.0.113.%d", i+1)
 		for n := 1; n <= 2; n++ {
-			// The first hop is the client, whatever proxies follow it.
-			res, body := doFrom(t, srv, fmt.Sprintf("%s, 10.0.0.%d", ip, n), c.method, c.path, c.body)
+			// The proxy's hop is the client, whatever the client put before it.
+			res, body := doFrom(t, srv, fmt.Sprintf("10.0.0.%d, %s", n, ip), c.method, c.path, c.body)
 			if res.StatusCode != 200 {
 				t.Fatalf("%s %s request %d: %d %s", c.method, c.path, n, res.StatusCode, body)
 			}
@@ -123,6 +123,36 @@ func TestNoRateLimitOutsideDemo(t *testing.T) {
 	for n := 1; n <= 70; n++ {
 		if res, _ := doFrom(t, srv, "", "GET", "/api/bars/BREAK", ""); res.StatusCode != 200 {
 			t.Fatalf("request %d: %d", n, res.StatusCode)
+		}
+	}
+}
+
+func TestDemoRateLimitIgnoresForwardedForWithoutTrustedProxies(t *testing.T) {
+	srv := serverWith(t, Config{Demo: true, RateLimit: 1})
+	if res, _ := doFrom(t, srv, "203.0.113.1", "GET", "/api/bars/BREAK", ""); res.StatusCode != 200 {
+		t.Fatalf("first request: %d", res.StatusCode)
+	}
+	// A new X-Forwarded-For value doesn't buy a new allowance: the header
+	// is the client's own claim, so the connection's address is the key.
+	if res, _ := doFrom(t, srv, "198.51.100.7", "GET", "/api/bars/BREAK", ""); res.StatusCode != 429 {
+		t.Fatalf("spoofed header: %d, want 429", res.StatusCode)
+	}
+}
+
+func TestClientIP(t *testing.T) {
+	for _, tc := range []struct {
+		xff     string
+		proxies int
+		want    string
+	}{
+		{"", 0, "192.0.2.9"},
+		{"203.0.113.1", 0, "192.0.2.9"},
+		{"6.6.6.6, 203.0.113.1", 1, "203.0.113.1"},
+		{"6.6.6.6, 203.0.113.1, 10.0.0.1", 2, "203.0.113.1"},
+		{"203.0.113.1", 2, "192.0.2.9"},
+	} {
+		if got := clientIP(tc.xff, "192.0.2.9:5555", tc.proxies); got != tc.want {
+			t.Errorf("clientIP(%q, %d) = %s, want %s", tc.xff, tc.proxies, got, tc.want)
 		}
 	}
 }

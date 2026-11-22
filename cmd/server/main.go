@@ -34,6 +34,7 @@ func run() error {
 	addr := flag.String("addr", "127.0.0.1:8080", "listen address, with $VARS expanded, e.g. :${PORT} (localhost only by default: saved systems are writable without auth)")
 	webDir := flag.String("web", "", "serve the web app from this directory instead of the one embedded in the binary")
 	demo := flag.Bool("demo", false, "public demo: open the database read-only, refuse saved-system writes and rate-limit per IP")
+	proxies := flag.Int("trusted-proxies", 0, "demo only: proxies in front of the server that append to X-Forwarded-For (1 on Cloud Run); 0 ignores the header")
 	rateLimit := flag.Int("rate-limit", api.DefaultRateLimit, "demo only: requests a minute per IP to backtest, scan, quickscan, report and bars")
 	dump := flag.Bool("dump-openapi", false, "print the OpenAPI spec as JSON and exit")
 	flag.Parse()
@@ -58,7 +59,7 @@ func run() error {
 	defer prov.Close()
 	log.Info("opened database", "file", *dbPath, "read_only", *demo)
 
-	cfg := api.Config{Logger: log, Demo: *demo, RateLimit: *rateLimit, Static: webui.FS()}
+	cfg := api.Config{Logger: log, Demo: *demo, RateLimit: *rateLimit, TrustedProxies: *proxies, Static: webui.FS()}
 	if *webDir != "" {
 		st, err := os.Stat(*webDir)
 		if err != nil || !st.IsDir() {
