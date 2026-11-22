@@ -56,12 +56,15 @@ func (s Summary) TooManyFailures() bool {
 
 // Backfill seeds the universe from opts.Symbols (membership start unknown)
 // and fetches every symbol's history, the benchmark ^NSEI first as an
-// index. Each symbol gets an ingest_log entry; a symbol whose fetch fails
-// or returns no bars writes nothing and is listed in Summary.Failed. The
-// error is only for store failures that stop the run.
+// index. The fetch replaces the symbol's stored history, so a rerun with a
+// later From drops the older bars rather than keep them on a basis the
+// source may since have rescaled. Each symbol gets an ingest_log entry; a
+// symbol whose fetch fails or returns no bars writes nothing and is listed
+// in Summary.Failed. The error is only for store failures that stop the
+// run.
 func Backfill(ctx context.Context, st *data.Store, src data.Source, opts Options) (Summary, error) {
 	return run(ctx, st, opts, func(in market.Instrument) (int, string, error) {
-		n, err := fetchOne(ctx, st, src, in, opts.From, opts.To)
+		n, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
 		return n, fmt.Sprintf("%d bars %s..%s", n, opts.From, opts.To), err
 	})
 }
@@ -77,7 +80,7 @@ func Update(ctx context.Context, st *data.Store, src data.Source, opts Options) 
 			return 0, "", fmt.Errorf("%w: %w", errStore, err)
 		}
 		if latest == "" {
-			n, err := fetchOne(ctx, st, src, in, opts.From, opts.To)
+			n, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
 			return n, fmt.Sprintf("%d bars %s..%s (new)", n, opts.From, opts.To), err
 		}
 		from := market.Date(latest.Time().AddDate(0, 0, -updateOverlapDays).Format(market.DateLayout))
@@ -90,14 +93,11 @@ func Update(ctx context.Context, st *data.Store, src data.Source, opts Options) 
 			return 0, "", fmt.Errorf("%w: %w", errStore, err)
 		}
 		if reason := refetchReason(from, splits, stored, bars); reason != "" {
-			full, fullSplits, err := fetch(ctx, src, in, opts.From, opts.To)
+			n, err := fetchFull(ctx, st, src, in, opts.From, opts.To)
 			if err != nil {
 				return 0, "", fmt.Errorf("refetch after %s: %w", reason, err)
 			}
-			if err := st.ReplaceDaily(ctx, in.ID, full, fullSplits); err != nil {
-				return 0, "", fmt.Errorf("%w: %w", errStore, err)
-			}
-			return len(full), fmt.Sprintf("refetched: %s; %d bars %s..%s", reason, len(full), opts.From, opts.To), nil
+			return n, fmt.Sprintf("refetched: %s; %d bars %s..%s", reason, n, opts.From, opts.To), nil
 		}
 		if err := st.UpsertDaily(ctx, in.ID, bars, splits); err != nil {
 			return 0, "", fmt.Errorf("%w: %w", errStore, err)
@@ -214,12 +214,14 @@ func fetch(ctx context.Context, src data.Source, in market.Instrument, from, to 
 	return bars, splits, nil
 }
 
-func fetchOne(ctx context.Context, st *data.Store, src data.Source, in market.Instrument, from, to market.Date) (int, error) {
+// fetchFull fetches an instrument's history in [from, to] and atomically
+// replaces its stored bars with it, returning the bars written.
+func fetchFull(ctx context.Context, st *data.Store, src data.Source, in market.Instrument, from, to market.Date) (int, error) {
 	bars, splits, err := fetch(ctx, src, in, from, to)
 	if err != nil {
 		return 0, err
 	}
-	if err := st.UpsertDaily(ctx, in.ID, bars, splits); err != nil {
+	if err := st.ReplaceDaily(ctx, in.ID, bars, splits); err != nil {
 		return 0, fmt.Errorf("%w: %w", errStore, err)
 	}
 	return len(bars), nil

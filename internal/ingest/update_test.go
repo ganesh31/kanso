@@ -69,6 +69,28 @@ func backfilled(t *testing.T, src *fakeSource, to market.Date) *data.Store {
 	return st
 }
 
+func TestBackfillRerunWithLaterFromKeepsOneBasis(t *testing.T) {
+	src := &fakeSource{bars: map[string][]market.Bar{"TCS.NS": weekdays("2016-01-01", 2000, 200), "^NSEI": weekdays("2016-01-01", 2000, 21000)}}
+	st := backfilled(t, src, "2023-08-31")
+
+	// A split since: Yahoo now serves all history at half. Rerunning the
+	// backfill from 2020 must not keep the pre-2020 bars at the old scale.
+	src.bars["TCS.NS"] = weekdays("2016-01-01", 2000, 100)
+	o := optsTo("2023-08-31", "TCS")
+	o.From = "2020-01-01"
+	if _, err := Backfill(context.Background(), st, src, o); err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range storedBars(t, st, "TCS") {
+		if b.Close != 100 {
+			t.Fatalf("bar %s close %v: history mixes adjustment bases", b.Date, b.Close)
+		}
+	}
+	if got := storedBars(t, st, "TCS"); got[0].Date != "2020-01-01" {
+		t.Fatalf("first bar %s, want 2020-01-01 (history is what the backfill fetched)", got[0].Date)
+	}
+}
+
 func TestUpdateUpsertsWhenOverlapMatches(t *testing.T) {
 	old := weekdays("2024-01-01", 65, 100) // through 2024-03-29
 	src := &fakeSource{bars: map[string][]market.Bar{"TCS.NS": old, "^NSEI": weekdays("2024-01-01", 65, 21000)}}
