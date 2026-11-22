@@ -46,7 +46,8 @@ func WriteParquet(w io.Writer, bars map[string][]Bar) error {
 }
 
 // ReadParquet reads a file written by WriteParquet back into bars keyed by
-// symbol. It exists to check exports; Kanso never loads data from Parquet.
+// symbol. It exists to check exports and to build test fixture databases
+// (data.Store.ImportParquet); Kanso never ingests real data from Parquet.
 func ReadParquet(r io.Reader) (map[string][]Bar, error) {
 	b, err := io.ReadAll(r)
 	if err != nil {
