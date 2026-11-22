@@ -163,6 +163,16 @@ describe("useSystems on a read-only server", () => {
     expect(server.calls.filter((c) => c !== "POST /api/validate" && c !== "GET /api/systems")).toEqual([]);
   });
 
+  test("every mounted list sees a browser save", async () => {
+    // Two components on one page, each with its own hook.
+    const { result } = renderHook(() => ({ a: useSystems(), b: useSystems() }), { wrapper });
+    await waitFor(() => expect(result.current.b.isLoading).toBe(false));
+    await act(async () => {
+      await result.current.a.save(draft);
+    });
+    await waitFor(() => expect(result.current.b.systems.map((s) => s.name)).toEqual(["Breakout"]));
+  });
+
   test("localStorage throwing doesn't break save", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new DOMException("denied", "SecurityError");

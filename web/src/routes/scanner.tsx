@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Scanner } from "@/components/Scanner";
 import { scannerSearchSchema } from "@/lib/scannerSearch";
+import { encodeDraft, fromSystem } from "@/state/draft";
 
 export const Route = createFileRoute("/scanner")({
   validateSearch: scannerSearchSchema,
@@ -17,6 +18,7 @@ function ScannerPage() {
       onOpenReport={(symbol, tf) =>
         void navigate({ to: "/report/$symbol", params: { symbol }, search: { tf: tf === "daily" ? undefined : tf } })
       }
+      onOpenBuilder={(system) => void navigate({ to: "/builder", search: { draft: encodeDraft(fromSystem(system)) } })}
     />
   );
 }

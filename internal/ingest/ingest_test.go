@@ -31,7 +31,19 @@ func (f *fakeSource) Daily(_ context.Context, symbol string, from, to market.Dat
 	if f.fail[symbol] {
 		return nil, nil, errors.New("HTTP 503")
 	}
-	return f.bars[symbol], f.split[symbol], nil
+	var bars []market.Bar
+	for _, b := range f.bars[symbol] {
+		if b.Date >= from && b.Date <= to {
+			bars = append(bars, b)
+		}
+	}
+	var splits []data.Split
+	for _, sp := range f.split[symbol] {
+		if sp.Date >= from && sp.Date <= to {
+			splits = append(splits, sp)
+		}
+	}
+	return bars, splits, nil
 }
 
 func twoBars(c float64) []market.Bar {

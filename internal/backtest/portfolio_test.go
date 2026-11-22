@@ -254,3 +254,27 @@ func TestSimulateSameDayStopAndExposure(t *testing.T) {
 		t.Fatalf("equity after the same-day round trip %v, want 1000", sim.Equity[2].Value)
 	}
 }
+
+func TestSingleStockEntryOnExitDay(t *testing.T) {
+	cal := simDates(10)
+	next := cand("AAA", cal, 4, 8, 100, 0)
+	for _, tc := range []struct {
+		name   string
+		reason ExitReason
+		gapped bool
+		taken  bool
+	}{
+		{"intraday stop: still held at the open", ExitStop, false, false},
+		{"gapped stop: sold at the open", ExitStop, true, true},
+		{"trend exit: sold at the open", ExitTrend, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prev := cand("AAA", cal, 1, 4, 100, 0)
+			prev.ExitReason, prev.GappedStop = tc.reason, tc.gapped
+			got := singleStock([]Trade{prev, next})
+			if (len(got) == 2) != tc.taken {
+				t.Fatalf("kept %d trades, want the day-4 entry taken=%v", len(got), tc.taken)
+			}
+		})
+	}
+}

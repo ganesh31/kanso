@@ -1,4 +1,4 @@
-import { type Timeframe, useScan } from "@/api/client";
+import { type Timeframe, useListPatterns, useScan } from "@/api/client";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ScannerSearch } from "@/lib/scannerSearch";
 import { useSystems } from "@/state/systems";
@@ -20,6 +20,8 @@ export function SavedScan({
   onOpenReport: (symbol: string, tf: Timeframe) => void;
 }) {
   const { systems, isLoading, error } = useSystems();
+  const patterns = useListPatterns({ query: { select: (b) => b.patterns } });
+  const labels = new Map((patterns.data ?? []).map((p) => [p.type, p.label.toLowerCase()]));
   const system = systems.find((s) => s.id === search.system);
   const mode = search.mode ?? "fresh";
   const scan = useScan(
@@ -59,9 +61,9 @@ export function SavedScan({
           </label>
           {system ? (
             <span className="text-muted-foreground pb-2 text-sm">
-              {`${system.universe} · ${system.timeframe ?? "daily"} · ${system.entry.all
+              {`Scans ${system.universe} on ${system.timeframe ?? "daily"} bars for ${system.entry.all
                 .concat(system.entry.any ?? [])
-                .map((c) => c.type)
+                .map((c) => labels.get(c.type) ?? c.type)
                 .join(", ")}`}
             </span>
           ) : null}

@@ -91,7 +91,7 @@ describe("SavedScan", () => {
     expect(scan).toHaveBeenLastCalledWith({ system: breakout, mode: "fresh" });
     expect(JSON.parse(screen.getByTestId("search").textContent)).toMatchObject({ tab: "saved", system: "sys-1" });
     expect(await screen.findByText("as of 2024-09-06")).toBeInTheDocument();
-    expect(screen.getByText(/NIFTY500 · weekly/)).toBeInTheDocument();
+    expect(screen.getByText("Scans NIFTY500 on weekly bars for n_year_high")).toBeInTheDocument();
   });
 
   test("a system in the URL is scanned on load, and the mode toggle rescans", async () => {

@@ -114,12 +114,15 @@ export function QuickScan({
   onSearchChange,
   onOpenReport,
   onSaved,
+  onOpenBuilder,
 }: {
   search: ScannerSearch;
   onSearchChange: (next: ScannerSearch) => void;
   onOpenReport: (symbol: string, tf: Timeframe) => void;
   /** Called with the new system's id after "Save as system". */
   onSaved: (id: string) => void;
+  /** Opens the scanned rule as a System Builder draft. */
+  onOpenBuilder: (system: System) => void;
 }) {
   const patternsQ = useListPatterns({ query: { select: (b) => b.patterns } });
   const universesQ = useListUniverses({ query: { select: (b) => b.universes } });
@@ -241,7 +244,30 @@ export function QuickScan({
           sort={search.sort}
           onSortChange={(sort) => onSearchChange({ ...search, sort })}
           onOpen={(symbol) => onOpenReport(symbol, request.timeframe ?? "daily")}
-          footer={<SaveAsSystem request={request} autoInserted={scan.data.auto_inserted} onSaved={onSaved} />}
+          footer={
+            <>
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <p className="text-muted-foreground text-sm">Backtest this rule, or add exits and more conditions.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-start"
+                  onClick={() =>
+                    onOpenBuilder(
+                      systemOf(
+                        patterns.find((p) => p.type === request.pattern)?.label ?? request.pattern,
+                        request,
+                        scan.data.auto_inserted,
+                      ),
+                    )
+                  }
+                >
+                  Open in System Builder
+                </Button>
+              </div>
+              <SaveAsSystem request={request} autoInserted={scan.data.auto_inserted} onSaved={onSaved} />
+            </>
+          }
         >
           {scan.data.auto_inserted.map((type) => {
             const inserted = patterns.find((p) => p.type === type);

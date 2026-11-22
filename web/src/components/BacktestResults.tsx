@@ -1,33 +1,11 @@
-import {
-  ApiError,
-  useBacktest,
-  useGetDefaultSystem,
-  useListPatterns,
-  type Condition,
-  type PortfolioStats,
-  type Trade,
-  type TradeStats,
-} from "@/api/client";
+import type { BacktestResult, PortfolioStats, Trade, TradeStats } from "@/api/client";
 import { useState } from "react";
 import { EquityChart } from "@/components/EquityChart";
 import { HonestyPanel } from "@/components/HonestyPanel";
 import { exitLabel, TradeChart } from "@/components/TradeChart";
-import { describeRule } from "@/components/EvidenceList";
 import { Button } from "@/components/ui/button";
-import { formatPrice, formatSignedPct, humanize } from "@/lib/format";
+import { formatPrice, formatSignedPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { recordVariation } from "@/state/variations";
-
-/** A condition as its registry label and the rule its params set, e.g. "Volume surge: needs volume at least 2×…". */
-function ConditionItem({ c, labels }: { c: Condition; labels: Map<string, string> }) {
-  const rule = describeRule(c.type, c.params ?? {});
-  return (
-    <li className="flex flex-col">
-      <span className="font-semibold">{labels.get(c.type) ?? humanize(c.type)}</span>
-      {rule ? <span className="text-muted-foreground text-sm">{rule}</span> : null}
-    </li>
-  );
-}
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
@@ -112,9 +90,6 @@ function PortfolioTiles({ stats }: { stats: PortfolioStats }) {
   );
 }
 
-/** The draft id the unsaved default system counts its variations under. */
-const DEFAULT_DRAFT = "default";
-
 const TRADES_SHOWN = 25;
 
 const tradeKey = (t: Trade) => `${t.symbol}-${t.entry_date}`;
@@ -182,101 +157,31 @@ function TradeList({ trades }: { trades: Trade[] }) {
   );
 }
 
-/** The System Builder's first cut: the default system, a Backtest button, portfolio tiles and equity vs Nifty, trade-level tiles and the trade list. */
-export function BacktestPanel() {
-  const def = useGetDefaultSystem();
-  const run = useBacktest();
-  const patterns = useListPatterns({ query: { select: (b) => b.patterns } });
-  const labels = new Map((patterns.data ?? []).map((p) => [p.type, p.label]));
-  const [variations, setVariations] = useState(0);
-
-  if (def.isPending) return <p className="text-muted-foreground">Loading the default system…</p>;
-  if (def.isError)
-    return (
-      <p role="alert" className="text-destructive">
-        {def.error.message}
-      </p>
-    );
-  const system = def.data.system;
-
+/**
+ * A backtest: portfolio tiles and equity vs Nifty, trade-level tiles and the trade list, with the
+ * honesty panel (and the draft's variations count) beside them.
+ */
+export function BacktestResults({ result, variations }: { result: BacktestResult; variations: number }) {
   return (
-    <div className="flex flex-col gap-8">
-      <section aria-labelledby="system-name" className="bg-card flex flex-col gap-4 rounded-lg border p-5">
-        <header className="flex flex-col gap-0.5">
-          <h2 id="system-name" className="text-xl font-bold">
-            {system.name}
-          </h2>
-          <span className="text-muted-foreground text-sm">
-            {`Buys ${system.universe} stocks when every condition below holds on a ${system.timeframe ?? "daily"} bar`}
-          </span>
-        </header>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {system.entry.all.map((c) => (
-            <ConditionItem key={c.type} c={c} labels={labels} />
-          ))}
-        </ul>
-        {system.exits ? (
-          <p className="border-t pt-3 text-sm">
-            <span className="font-semibold">Exits: </span>
-            stop {system.exits.stop_pct}% below entry
-            {system.exits.trend_sma_weeks > 0
-              ? `, or sell when a week closes below its ${system.exits.trend_sma_weeks}-week average`
-              : ""}
-            .
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section aria-label="Results" className="flex min-w-0 flex-col gap-8">
+        <div className="flex flex-col gap-3">
+          <h3 className="text-lg font-bold">Portfolio</h3>
+          <PortfolioTiles stats={result.portfolio} />
+          <EquityChart equity={result.equity} benchmark={result.benchmark} />
+        </div>
+        <div className="flex flex-col gap-3">
+          <h3 className="text-lg font-bold">Every signal</h3>
+          <p className="text-muted-foreground -mt-2 text-sm">
+            Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
           </p>
-        ) : null}
-        <div>
-          <Button
-            onClick={() =>
-              run.mutate(
-                { data: system },
-                { onSuccess: () => setVariations(recordVariation(system.id ?? DEFAULT_DRAFT, system)) },
-              )
-            }
-            disabled={run.isPending}
-          >
-            Backtest
-          </Button>
+          <TradeTiles stats={result.trade_stats} />
+          <TradeList trades={result.trades} />
         </div>
       </section>
-
-      {run.isPending ? <p className="text-muted-foreground">Backtesting {system.universe} since 2007…</p> : null}
-      {run.isError ? (
-        <div role="alert" className="text-destructive">
-          <p>{run.error.message}</p>
-          {run.error instanceof ApiError && run.error.fields.length > 0 ? (
-            <ul className="list-disc pl-5 text-sm">
-              {run.error.fields.map((f) => (
-                <li key={f.path}>
-                  {f.path}: {f.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-      {run.isSuccess ? (
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <section aria-label="Results" className="flex min-w-0 flex-col gap-8">
-            <div className="flex flex-col gap-3">
-              <h3 className="text-lg font-bold">Portfolio</h3>
-              <PortfolioTiles stats={run.data.portfolio} />
-              <EquityChart equity={run.data.equity} benchmark={run.data.benchmark} />
-            </div>
-            <div className="flex flex-col gap-3">
-              <h3 className="text-lg font-bold">Every signal</h3>
-              <p className="text-muted-foreground -mt-2 text-sm">
-                Each signal traded on its own, with no slot or cash limits, to show how the pattern itself behaves.
-              </p>
-              <TradeTiles stats={run.data.trade_stats} />
-              <TradeList trades={run.data.trades} />
-            </div>
-          </section>
-          <div className="lg:sticky lg:top-6">
-            <HonestyPanel honesty={run.data.honesty} variations={variations} />
-          </div>
-        </div>
-      ) : null}
+      <div className="lg:sticky lg:top-6">
+        <HonestyPanel honesty={result.honesty} variations={variations} />
+      </div>
     </div>
   );
 }

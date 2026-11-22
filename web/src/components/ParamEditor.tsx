@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { ParamSpec } from "@/api/client";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import type { ParamValue, ParamValues } from "@/lib/scannerSearch";
-import { cn } from "@/lib/utils";
 
 /** The pattern's defaults overlaid with the given values: every param has a value. */
 export function withDefaults(specs: ParamSpec[], values: ParamValues = {}): ParamValues {
@@ -22,38 +22,26 @@ export function ParamEditor({
   specs,
   params,
   onChange,
+  idPrefix = "param",
 }: {
   specs: ParamSpec[];
   params: ParamValues;
   onChange: (next: ParamValues) => void;
+  /** Keeps input ids unique when a page shows several editors. */
+  idPrefix?: string;
 }) {
   const set = (name: string, v: ParamValue) => onChange({ ...params, [name]: v });
   if (specs.length === 0) return null;
   return (
     <div className="flex flex-wrap items-end gap-4">
       {specs.map((s) => {
-        const id = `param-${s.name}`;
+        const id = `${idPrefix}-${s.name}`;
         const value = params[s.name];
         if (s.kind === "bool") {
           const on = value === true;
           return (
             <div key={s.name} className="flex items-center gap-2 text-sm">
-              <button
-                id={id}
-                type="button"
-                role="switch"
-                aria-checked={on}
-                aria-label={s.label}
-                onClick={() => set(s.name, !on)}
-                className={cn("relative h-5 w-9 rounded-full border transition-colors", on ? "bg-primary" : "bg-muted")}
-              >
-                <span
-                  className={cn(
-                    "absolute top-0.5 left-0 size-3.5 rounded-full transition-transform",
-                    on ? "bg-primary-foreground translate-x-4" : "bg-muted-foreground translate-x-0.5",
-                  )}
-                />
-              </button>
+              <Switch id={id} checked={on} aria-label={s.label} onChange={(next) => set(s.name, next)} />
               <label htmlFor={id}>{s.label}</label>
             </div>
           );

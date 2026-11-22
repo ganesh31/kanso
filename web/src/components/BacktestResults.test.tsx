@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { configureApi, type BacktestResult, type System } from "@/api/client";
-import { BacktestPanel } from "./BacktestPanel";
+import { BacktestResults } from "./BacktestResults";
 
 vi.mock("./EquityChart", () => ({
   EquityChart: ({ equity, benchmark }: { equity: unknown[]; benchmark: unknown[] }) => (
@@ -115,7 +115,6 @@ const result: BacktestResult = {
   ],
 };
 
-const backtest = vi.fn<(body: unknown) => Response>();
 const tcsBars = ["2024-02-06", "2024-02-07", "2024-02-08", "2024-03-01", "2024-03-04"].map((date) => ({
   date,
   open: 4100,
@@ -129,27 +128,23 @@ const bars = vi.fn((url: string) => {
   return json(200, { symbol, bars: symbol === "TCS" ? tcsBars : [] });
 });
 
-function renderPanel() {
+function renderPanel(r: BacktestResult = result, variations = 1) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BacktestPanel />
+      <BacktestResults result={r} variations={variations} />
     </QueryClientProvider>,
   );
 }
 
-describe("BacktestPanel", () => {
+describe("BacktestResults", () => {
   beforeEach(() => {
     localStorage.clear();
-    backtest.mockReset();
-    backtest.mockReturnValue(json(200, result));
     configureApi({
       baseUrl: "http://test",
       fetch: async (input) => {
         const req = input as Request;
         const path = new URL(req.url).pathname;
-        if (path === "/api/default-system") return json(200, { system });
-        if (path === "/api/backtest") return backtest(await req.json());
         if (path.startsWith("/api/bars/")) return bars(req.url);
         return json(404, { title: "Not Found" });
       },
@@ -158,13 +153,8 @@ describe("BacktestPanel", () => {
 
   afterEach(() => configureApi({}));
 
-  test("opens on the default system and backtests it", async () => {
+  test("shows trade-level stats and the fill model", async () => {
     renderPanel();
-    expect(await screen.findByText("3-year breakout")).toBeInTheDocument();
-    expect(screen.getByText("Buys NIFTY50 stocks when every condition below holds on a daily bar")).toBeInTheDocument();
-    expect(screen.getByText("Close above the highest high of the prior 3 years")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Backtest" }));
-    await waitFor(() => expect(backtest).toHaveBeenCalledWith(system));
 
     const tiles = await screen.findByRole("region", { name: "Trade-level stats" });
     expect(within(tiles).getByText("Trades").nextSibling).toHaveTextContent("2");
@@ -178,7 +168,6 @@ describe("BacktestPanel", () => {
 
   test("CAGR and max drawdown tiles each show the Nifty comparison", async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     const tiles = await screen.findByRole("region", { name: "Portfolio stats" });
     const cagr = within(tiles).getByRole("group", { name: "CAGR" });
     expect(cagr).toHaveTextContent("+14.20%");
@@ -193,26 +182,20 @@ describe("BacktestPanel", () => {
 
   test("lists the ranking rule and skipped signals", async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     expect(await screen.findByText(/crowded days ranked by 6-month RS, then symbol/)).toBeInTheDocument();
     expect(screen.getByText(/1 signal skipped: price above slot size \(MRF 2024-03-04\)/)).toBeInTheDocument();
     expect(screen.getByText(/1 signal skipped: insufficient cash \(HDFCBANK 2014-05-12\)/)).toBeInTheDocument();
   });
 
-  test("honesty panel beside the results counts each backtest's parameter set once", async () => {
-    renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+  test("the honesty panel beside the results shows the variations count", async () => {
+    renderPanel(result, 3);
     const panel = await screen.findByRole("complementary", { name: "How this was tested" });
-    expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent("1");
+    expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent("3");
     expect(within(panel).getByText(/survivorship bias/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Backtest" }));
-    await waitFor(() => expect(backtest).toHaveBeenCalledTimes(2));
-    expect(within(panel).getByText("Variations tested").nextSibling).toHaveTextContent("1");
   });
 
   test("lists every trade with its exit reason", async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     const table = await screen.findByRole("table", { name: "Trades" });
     const rows = within(table).getAllByRole("row");
     expect(rows).toHaveLength(3);
@@ -225,7 +208,6 @@ describe("BacktestPanel", () => {
 
   test("clicking a trade opens chart with entry/exit markers", async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     const table = await screen.findByRole("table", { name: "Trades" });
     expect(screen.queryByTestId("price-chart")).not.toBeInTheDocument();
 
@@ -254,7 +236,6 @@ describe("BacktestPanel", () => {
 
   test("a trade still open has no exit marker and no level line without a level", async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
     const table = await screen.findByRole("table", { name: "Trades" });
     fireEvent.click(within(table).getByRole("button", { name: "Chart the INFY trade entered 2024-09-03" }));
     const pc = within(await screen.findByRole("figure", { name: "INFY trade chart" })).getByTestId("price-chart");
@@ -264,28 +245,13 @@ describe("BacktestPanel", () => {
     ]);
   });
 
-  test("shows a backtest error", async () => {
-    backtest.mockReturnValue(
-      json(400, {
-        title: "Bad Request",
-        detail: "invalid request",
-        errors: [{ location: "body.entry.any", message: "too few" }],
-      }),
-    );
-    renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("entry.any: too few");
-  });
-
   test("long trade lists show 25 rows until asked for all", async () => {
     const first = result.trades[0]!;
     const trades = Array.from({ length: 30 }, (_, i) => ({
       ...first,
       symbol: `S${String(i).padStart(2, "0")}`,
     }));
-    backtest.mockReturnValue(json(200, { ...result, trades }));
-    renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Backtest" }));
+    renderPanel({ ...result, trades });
     const table = await screen.findByRole("table", { name: "Trades" });
     expect(within(table).getAllByRole("row")).toHaveLength(1 + 25);
     fireEvent.click(screen.getByRole("button", { name: "Show all 30 trades" }));
