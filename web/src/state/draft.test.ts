@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import type { System } from "@/api/client";
-import { decodeDraft, encodeDraft, fromSystem, systemReducer, toSystem } from "./draft";
+import { decodeDraft, encodeDraft, errorsByBlock, fromSystem, systemReducer, toSystem } from "./draft";
 
 const system: System = {
   name: "3-year breakout",
@@ -84,5 +84,24 @@ describe("the ?draft= param", () => {
     expect(decodeDraft("not base64 json")).toBeUndefined();
     expect(decodeDraft(encodeDraft(fromSystem(system)).slice(0, 10))).toBeUndefined();
     expect(decodeDraft(btoa(JSON.stringify({ name: 1 })))).toBeUndefined();
+  });
+});
+
+describe("errorsByBlock", () => {
+  test("condition errors land on the draft's block, skipping switched-off conditions", () => {
+    let d = systemReducer(fromSystem(system), { type: "toggle", group: "all", index: 0 });
+    d = systemReducer(d, { type: "addCondition", group: "any", condition: { type: "relative_strength" } });
+    const errs = errorsByBlock(d, [
+      // The sent system's all[0] is the draft's all[1]: all[0] is switched off.
+      { path: "entry.all[0].params", message: "k must be at most 10" },
+      { path: "system.entry.any", message: "needs at least 2 conditions" },
+      { path: "exits.stop_pct", message: "must be more than 0" },
+      { path: "universe", message: "unknown stock list" },
+    ]);
+    expect(errs.get("all:1")).toEqual(["k must be at most 10"]);
+    expect(errs.get("all:0")).toBeUndefined();
+    expect(errs.get("group:any")).toEqual(["needs at least 2 conditions"]);
+    expect(errs.get("exits")).toEqual(["Stop-loss: must be more than 0"]);
+    expect(errs.get("setup")).toEqual(["Stock list: unknown stock list"]);
   });
 });

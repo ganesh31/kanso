@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { type Condition, type Costs, type Exits, type Portfolio, type System, SystemTimeframe } from "@/api/client";
+import {
+  type Condition,
+  type Costs,
+  type Exits,
+  type FieldError,
+  type Portfolio,
+  type System,
+  SystemTimeframe,
+} from "@/api/client";
 
 /** A condition in the Builder: its params, and whether it is switched off (kept in the draft, not sent). */
 export interface DraftCondition {
@@ -122,6 +130,50 @@ export function systemReducer(d: Draft, a: DraftAction): Draft {
     case "load":
       return fromSystem(a.system);
   }
+}
+
+/** Plain names for the system-level fields the API can reject. */
+const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  universe: "Stock list",
+  timeframe: "Timeframe",
+  "exits.stop_pct": "Stop-loss",
+  "exits.trend_sma_weeks": "Trend exit",
+  "costs.per_side_pct": "Costs per side",
+  "costs.slippage_pct": "Slippage per side",
+  "portfolio.capital": "Starting capital",
+  "portfolio.max_positions": "Most positions at once",
+};
+
+/**
+ * The API's field errors for a draft, by the block that shows them: `all:<i>` / `any:<i>` for a
+ * condition (the draft's index, so switched-off conditions are skipped over), `group:all` /
+ * `group:any` for a whole group, `exits`, `costs`, `portfolio`, and `setup` for the rest.
+ * Paths are those of the sent system, with or without a leading `system.`.
+ */
+export function errorsByBlock(d: Draft, fields: FieldError[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const add = (key: string, msg: string) => out.set(key, [...(out.get(key) ?? []), msg]);
+  const sentIndex = { all: sentConditions(d.all), any: sentConditions(d.any) };
+  for (const f of fields) {
+    const path = f.path.replace(/^system\./, "");
+    const cond = /^entry\.(all|any)\[(\d+)\]/.exec(path);
+    const group = /^entry\.(all|any)$/.exec(path);
+    const top = path.split(".")[0] ?? "";
+    if (cond) {
+      const g = cond[1] as Group;
+      const draftIndex = sentIndex[g][Number(cond[2])]?.index;
+      if (draftIndex === undefined) add(`group:${g}`, f.message);
+      else add(`${g}:${draftIndex}`, f.message);
+    } else if (group) {
+      add(`group:${group[1]}`, f.message);
+    } else if (top === "exits" || top === "costs" || top === "portfolio") {
+      add(top, `${FIELD_LABELS[path] ?? path}: ${f.message}`);
+    } else {
+      add("setup", FIELD_LABELS[path] ? `${FIELD_LABELS[path]}: ${f.message}` : f.message);
+    }
+  }
+  return out;
 }
 
 const conditionSchema = z.object({
